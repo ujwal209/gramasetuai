@@ -1,10 +1,21 @@
 import axios, { type AxiosInstance } from 'axios';
 
-// API base URL configured from environment variable with fallback
-const API_BASE_URL: string =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
-  'http://localhost:8000';
+// Clean and resolve API Base URL dynamically
+export function getCleanApiBaseUrl(): string {
+  let url =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
+    (typeof process !== 'undefined' && (process.env as any)?.VITE_API_BASE_URL) ||
+    'http://localhost:8000';
 
+  if (typeof url === 'string') {
+    url = url.trim().replace(/\/+$/, '');
+    // Strip trailing /api/v1 or /api if the user added it in the env variable
+    url = url.replace(/\/api\/v1$/, '').replace(/\/api$/, '');
+  }
+  return url || 'http://localhost:8000';
+}
+
+const API_BASE_URL: string = getCleanApiBaseUrl();
 
 export interface HealthCheckResponse {
   status: string;
@@ -94,6 +105,32 @@ export interface AiOverview {
   recommended_action?: string;
 }
 
+export interface PopularSchemeCategory {
+  category: string;
+  schemes: Scheme[];
+}
+
+export interface SearchSchemesResponse {
+  query: string;
+  total_results: number;
+  schemes: Scheme[];
+  ai_overview?: AiOverview;
+  source_citations?: SourceCitation[];
+}
+
+export interface Scheme {
+  id: string;
+  name: string;
+  short_description: string;
+  benefits: string[];
+  state?: string | null;
+  category?: string | null;
+  application_url?: string | null;
+  official_source_url: string;
+  match_score?: number;
+  eligible_status?: boolean;
+}
+
 export interface RealtimeSearchResponse {
   id?: string;
   query: string;
@@ -119,19 +156,22 @@ export interface SchemeSearchHistoryItem {
   created_at: string;
 }
 
-// Authentic real-world imagery for government schemes
-export const SCHEME_IMAGES: Record<string, string> = {
-  'pm-kisan-001': 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80', // Lush agriculture field
-  'pmay-g-002': 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=800&q=80', // Modern rural house
-  'pmmvy-003': 'https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&w=800&q=80', // Mother & infant care
-  'pm-jay-004': 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80', // Healthcare hospital & medical
-  'raitha-vidya-005': 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80', // Student education books
+// Fallback scheme imagery mapping
+const SCHEME_IMAGES: Record<string, string> = {
+  'pm-kisan-001': '/schemediscovery.png',
+  'pm-kusum-002': '/climategislinker.png',
+  'pmay-g-002': '/dashboard/Application Timeline & Live Stage Tracker.png',
+  'pm-jay-004': '/nitirag.png',
+  'pmmvy-003': '/vani.png',
+  'raitha-vidya-005': '/schemediscovery.png',
+  default: '/schemediscovery.png',
 };
 
-export function getSchemeImage(schemeId: string, category?: string | null): string {
+export function getSchemeIllustration(schemeId: string, category?: string | null): string {
   if (SCHEME_IMAGES[schemeId]) return SCHEME_IMAGES[schemeId];
   const cat = (category || '').toLowerCase();
   if (cat.includes('agri') || cat.includes('farm')) return SCHEME_IMAGES['pm-kisan-001'];
+  if (cat.includes('solar') || cat.includes('energy')) return SCHEME_IMAGES['pm-kusum-002'];
   if (cat.includes('hous') || cat.includes('rural')) return SCHEME_IMAGES['pmay-g-002'];
   if (cat.includes('health') || cat.includes('social')) return SCHEME_IMAGES['pm-jay-004'];
   if (cat.includes('women') || cat.includes('child')) return SCHEME_IMAGES['pmmvy-003'];
@@ -141,7 +181,7 @@ export function getSchemeImage(schemeId: string, category?: string | null): stri
 
 // Axios instance with environment-driven base URL
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL.replace(/\/$/, ''),
+  baseURL: getCleanApiBaseUrl(),
   timeout: 90000,
   headers: {
     'Content-Type': 'application/json',
@@ -149,9 +189,10 @@ export const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Automatic JWT Token Injection
+// Dynamic BaseURL & JWT Token Injection
 apiClient.interceptors.request.use(
   (config) => {
+    config.baseURL = getCleanApiBaseUrl();
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('gramsetu_jwt_token');
       if (token) {
