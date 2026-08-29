@@ -303,7 +303,7 @@ async def summarize_and_fork_conversation(req: SummarizeAndForkRequest):
         try:
             client = Groq(api_key=key, timeout=10.0)
             resp = client.chat.completions.create(
-                model="openai/gpt-oss-20b",
+                model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": summary_prompt}],
                 max_tokens=600,
             )

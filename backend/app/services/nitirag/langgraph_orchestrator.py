@@ -227,7 +227,13 @@ async def synthesize_legal_advisory_node(state: NitiragGraphState) -> Dict[str, 
     # Groq Multi-Key Synthesis
     synthesized_answer = ""
     active_keys = groq_pool.get_all_keys()
-    candidate_models = ["openai/gpt-oss-20b", "groq/compound-mini", "openai/gpt-oss-120b", "allam-2-7b"]
+    candidate_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768"
+    ]
 
     for key in active_keys:
         for model_name in candidate_models:

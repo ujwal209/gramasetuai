@@ -182,7 +182,7 @@ export function getSchemeIllustration(schemeId: string, category?: string | null
 // Axios instance with environment-driven base URL
 export const apiClient: AxiosInstance = axios.create({
   baseURL: getCleanApiBaseUrl(),
-  timeout: 90000,
+  timeout: 180000,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',

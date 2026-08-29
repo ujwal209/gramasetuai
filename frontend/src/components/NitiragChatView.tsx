@@ -661,16 +661,20 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
             )}
 
             <Link
-              href="/dashboard/nitirag/documents"
-              className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition hidden lg:inline-flex items-center"
-            >
-              Gazettes &amp; Vault
-            </Link>
-            <Link
               href="/dashboard/nitirag/upload"
-              className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition hidden md:inline-flex items-center"
+              className="h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg sm:rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold transition flex items-center gap-1 shrink-0 shadow-2xs"
+              title="Upload Government Gazette or Scheme PDF"
             >
-              + Upload PDF
+              <span className="text-sm font-bold leading-none">+</span>
+              <span className="hidden sm:inline">Upload PDF</span>
+              <span className="sm:hidden">Upload</span>
+            </Link>
+
+            <Link
+              href="/dashboard/nitirag/documents"
+              className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition hidden sm:inline-flex items-center"
+            >
+              Gazettes
             </Link>
           </div>
         </header>
@@ -983,20 +987,31 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
             </form>
 
             <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono text-slate-400 px-1">
-              <button
-                type="button"
-                onClick={() => setEnableWebSearch(!enableWebSearch)}
-                className={`px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
-                  enableWebSearch
-                    ? 'border-blue-500 bg-blue-50 text-blue-900'
-                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                </svg>
-                <span>Web Search: {enableWebSearch ? 'ON' : 'OFF'}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setEnableWebSearch(!enableWebSearch)}
+                  className={`px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                    enableWebSearch
+                      ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                  </svg>
+                  <span>Web Search: {enableWebSearch ? 'ON' : 'OFF'}</span>
+                </button>
+
+                <Link
+                  href="/dashboard/nitirag/upload"
+                  className="px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100 text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                  title="Upload new government circular or scheme gazette PDF"
+                >
+                  <span>📄</span>
+                  <span>+ Upload PDF</span>
+                </Link>
+              </div>
 
               <span className="hidden sm:inline">
                 GramSetu Niti RAG • Official Gazette Directives
