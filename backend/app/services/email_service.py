@@ -2,6 +2,7 @@ import os
 import smtplib
 import asyncio
 import logging
+from typing import Optional, Dict, Any, List
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
