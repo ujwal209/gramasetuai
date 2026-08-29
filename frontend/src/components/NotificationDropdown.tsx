@@ -454,8 +454,9 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
               Direct Messages
             </Link>
           </div>
-        </>
-      )}
-    </div>
-  );
+        </div>
+      </>
+    )}
+  </div>
+);
 }

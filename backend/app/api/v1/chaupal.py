@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, Body, BackgroundTasks
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+import os
 import uuid
 import re
 import asyncio
 import logging
 
+from app.core.config import settings
 from app.database.mongodb import get_mongo_db, get_database
 from app.services.email_service import email_service
 
