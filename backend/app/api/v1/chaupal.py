@@ -820,6 +820,157 @@ async def get_chat_history(
 _typing_status_tracker: Dict[str, float] = {}
 
 
+@router.get("/users/search", summary="Search and autocomplete platform farmer accounts")
+async def search_platform_users(
+    query: str = Query(""),
+    current_user: str = Query("citizen_farmer"),
+    limit: int = Query(20)
+):
+    clean_current_user = normalize_handle(current_user)
+    db = get_mongo_db()
+    users_list = []
+    
+    following_handles = set()
+    if db is not None:
+        try:
+            cursor = db["followers"].find({"follower_handle": clean_current_user})
+            async for f in cursor:
+                following_handles.add(f.get("following_handle"))
+        except Exception:
+            pass
+
+    SEED_ACCOUNTS = [
+        {
+            "username": "ramesh_patel",
+            "name": "Ramesh Patel",
+            "avatar_url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80",
+            "village": "Mandya, Karnataka",
+            "district": "Mandya",
+            "state": "Karnataka",
+            "badge": "Progressive Paddy Farmer",
+            "is_verified": True,
+            "followers_count": 1420,
+            "crops": ["Paddy", "Sugarcane"]
+        },
+        {
+            "username": "kavitha_reddy",
+            "name": "Kavitha Reddy",
+            "avatar_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
+            "village": "Guntur, Andhra Pradesh",
+            "district": "Guntur",
+            "state": "Andhra Pradesh",
+            "badge": "Chilli & Cotton Expert",
+            "is_verified": True,
+            "followers_count": 2890,
+            "crops": ["Chilli", "Cotton"]
+        },
+        {
+            "username": "suresh_deshmukh",
+            "name": "Suresh Deshmukh",
+            "avatar_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+            "village": "Nashik, Maharashtra",
+            "district": "Nashik",
+            "state": "Maharashtra",
+            "badge": "Organic Onion & Grape Pioneer",
+            "is_verified": True,
+            "followers_count": 3410,
+            "crops": ["Onion", "Grapes", "Organic"]
+        },
+        {
+            "username": "ananya_krishi",
+            "name": "Ananya Sharma",
+            "avatar_url": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
+            "village": "Ludhiana, Punjab",
+            "district": "Ludhiana",
+            "state": "Punjab",
+            "badge": "Krishi Vigyan Advisor",
+            "is_verified": True,
+            "followers_count": 5120,
+            "crops": ["Wheat", "Mustard"]
+        },
+        {
+            "username": "vikram_yadav",
+            "name": "Vikram Yadav",
+            "avatar_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
+            "village": "Jaipur, Rajasthan",
+            "district": "Jaipur",
+            "state": "Rajasthan",
+            "badge": "Solar Irrigation Innovator",
+            "is_verified": True,
+            "followers_count": 980,
+            "crops": ["Bajra", "Mustard", "Solar"]
+        }
+    ]
+
+    found_usernames = set()
+    
+    if db is not None:
+        try:
+            filter_q: Dict[str, Any] = {
+                "$and": [
+                    {"handle": {"$nin": [clean_current_user, "gramsetu_official", "gramsetu_gov"]}},
+                    {"username": {"$nin": [clean_current_user, "gramsetu_official", "gramsetu_gov"]}}
+                ]
+            }
+            q_clean = query.strip().lstrip("@")
+            if q_clean:
+                filter_q["$or"] = [
+                    {"name": {"$regex": q_clean, "$options": "i"}},
+                    {"handle": {"$regex": q_clean, "$options": "i"}},
+                    {"username": {"$regex": q_clean, "$options": "i"}},
+                    {"village": {"$regex": q_clean, "$options": "i"}},
+                    {"district": {"$regex": q_clean, "$options": "i"}},
+                    {"state": {"$regex": q_clean, "$options": "i"}},
+                    {"crop_specialty": {"$regex": q_clean, "$options": "i"}},
+                ]
+
+            cursor = db["users"].find(filter_q).limit(limit)
+            async for u in cursor:
+                h = u.get("handle") or u.get("username")
+                if not h or h in found_usernames or h in (clean_current_user, "gramsetu_official", "gramsetu_gov"):
+                    continue
+                found_usernames.add(h)
+                f_count = await db["followers"].count_documents({"following_handle": h})
+                
+                users_list.append({
+                    "username": h,
+                    "name": u.get("name") or h.replace("_", " ").title(),
+                    "avatar_url": u.get("avatar_url") or "/logo.png",
+                    "village": f"{u.get('village', 'Village')}, {u.get('district', 'District')}" if u.get("village") else f"{u.get('state', 'Karnataka')}, India",
+                    "badge": u.get("badge") or "Registered Farmer",
+                    "is_verified": u.get("is_verified", True),
+                    "followers_count": max(f_count, int(u.get("followers_count", 0))),
+                    "is_following": h in following_handles
+                })
+        except Exception as e:
+            logger.warning(f"Error querying users for search: {e}")
+
+    q_lower = query.strip().lower().lstrip("@")
+    for s in SEED_ACCOUNTS:
+        if s["username"] in found_usernames or s["username"] == clean_current_user:
+            continue
+        if not q_lower or (
+            q_lower in s["username"].lower() or
+            q_lower in s["name"].lower() or
+            q_lower in s["village"].lower() or
+            q_lower in s["badge"].lower() or
+            any(q_lower in c.lower() for c in s.get("crops", []))
+        ):
+            users_list.append({
+                "username": s["username"],
+                "name": s["name"],
+                "avatar_url": s["avatar_url"],
+                "village": s["village"],
+                "badge": s["badge"],
+                "is_verified": s["is_verified"],
+                "followers_count": s["followers_count"],
+                "is_following": s["username"] in following_handles
+            })
+            found_usernames.add(s["username"])
+
+    return {"success": True, "users": users_list[:limit]}
+
+
 @router.get("/messages/users/search", summary="Search registered platform users to start a new chat")
 async def search_messageable_users(
     query: str = Query(""),

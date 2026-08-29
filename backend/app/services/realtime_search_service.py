@@ -23,12 +23,13 @@ if not logger.handlers:
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-# Verified Active Groq Models (Fastest 20B/mini first for < 2.5s response)
+# Verified Active Groq Models
 GROQ_AVAILABLE_MODELS = [
-    "openai/gpt-oss-20b",
     "groq/compound-mini",
     "openai/gpt-oss-120b",
-    "allam-2-7b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
+    "groq/compound",
 ]
 
 
@@ -327,7 +328,11 @@ Output strictly a JSON object with this structure:
 
         if groq_json_str:
             try:
-                parsed = json.loads(groq_json_str)
+                clean_json = groq_json_str.strip()
+                if clean_json.startswith("```"):
+                    clean_json = re.sub(r'^```[a-zA-Z]*\n', '', clean_json)
+                    clean_json = re.sub(r'\n```$', '', clean_json).strip()
+                parsed = json.loads(clean_json)
                 ai_overview = parsed.get("ai_overview", {})
                 raw_schemes = parsed.get("schemes", [])
 

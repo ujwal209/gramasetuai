@@ -2176,6 +2176,30 @@ export async function getChaupalTrending(): Promise<{ success: boolean; trends: 
   return res.data;
 }
 
+export interface SearchedFarmerAccount {
+  username: string;
+  name: string;
+  avatar_url: string;
+  village: string;
+  badge: string;
+  is_verified?: boolean;
+  followers_count: number;
+  is_following?: boolean;
+}
+
+export async function searchPlatformUsers(query: string = '', currentUser: string = 'citizen_farmer'): Promise<{
+  success: boolean;
+  users: SearchedFarmerAccount[];
+}> {
+  const res = await apiClient.get<{
+    success: boolean;
+    users: SearchedFarmerAccount[];
+  }>('/api/v1/chaupal/users/search', {
+    params: { query, current_user: currentUser }
+  });
+  return res.data;
+}
+
 /**
  * Get suggested progressive farmers & official bodies
  */

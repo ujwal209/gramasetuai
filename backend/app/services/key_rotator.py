@@ -73,7 +73,12 @@ class RoundRobinKeyPool:
             return key
 
     def get_all_keys(self) -> List[str]:
-        return list(self.keys)
+        if not self.keys:
+            return []
+        with self._lock:
+            start = self._index % len(self.keys)
+            self._index = (self._index + 1) % len(self.keys)
+            return self.keys[start:] + self.keys[:start]
 
     def count(self) -> int:
         return len(self.keys)

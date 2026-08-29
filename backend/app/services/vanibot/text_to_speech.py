@@ -66,8 +66,8 @@ class TextToSpeechService:
                     payload = {
                         "inputs": [clean_text_for_speech],
                         "target_language_code": target_locale,
-                        "speaker": "anushka",
-                        "model": "bulbul:v2",
+                        "speaker": "kavya",
+                        "model": "bulbul:v3",
                     }
                     async with httpx.AsyncClient(timeout=10.0) as client:
                         resp = await client.post(
@@ -84,7 +84,7 @@ class TextToSpeechService:
                                     audio_base64=audios[0],
                                     mime_type="audio/wav",
                                     provider="sarvam",
-                                    message="Synthesized via Sarvam AI Bulbul v2 Neural Voice",
+                                    message="Synthesized via Sarvam AI Bulbul v3 Neural Voice",
                                 )
                 except Exception as e:
                     logger.warning(f"[Sarvam TTS] Key #{key_idx + 1} failed: {e}. Trying next...")
