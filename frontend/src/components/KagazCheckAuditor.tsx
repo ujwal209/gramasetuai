@@ -1,127 +1,111 @@
-import { useState, useRef, useEffect } from 'react';
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import { CustomDropdown } from '@/components/CustomDropdown';
 import {
-  Camera,
-  UploadCloud,
-  FileCheck,
-  CheckCircle2,
-  AlertCircle,
-  AlertTriangle,
-  Sparkles,
-  ShieldCheck,
-  RotateCcw,
-  Layers,
-  ArrowRight,
-  Info,
-  RefreshCw,
-  X,
-  FileText,
-} from 'lucide-react';
-import {
-  analyzeDocument,
+  getPopularSchemes,
+  analyzeBatchDocuments,
+  getKagazAuditHistory,
+  deleteKagazAuditById,
+  clearKagazAuditHistory,
   fetchSupportedDocumentTypes,
-  type CitizenProfile,
   type SchemeData,
-  type SchemeMatchResult,
-  type DocumentAnalysisResult,
-  type SchemeReadinessAudit,
+  type CitizenProfile,
+  type KagazBatchAuditReport,
   type DocumentTypeSpecification,
-  type KagazCheckAnalyzeResponse,
-} from '../services/api';
+} from '@/services/api';
 
 interface KagazCheckAuditorProps {
-  initialScheme?: SchemeData | SchemeMatchResult | { id: string; name: string; required_documents: string[] } | null;
-  citizenProfile?: CitizenProfile;
-  onApplyForScheme?: (schemeId: string) => void;
-  onGenerateParchaa?: (schemeId: string) => void;
-  availableSchemes?: SchemeData[];
+  initialSchemeId?: string;
+  onSelectScheme?: (schemeId: string) => void;
 }
 
-export function KagazCheckAuditor({
-  initialScheme = null,
-  citizenProfile,
-  onApplyForScheme,
-  onGenerateParchaa,
-  availableSchemes = [],
-}: KagazCheckAuditorProps) {
+export function KagazCheckAuditor({ initialSchemeId }: KagazCheckAuditorProps) {
+  const { user } = useAuth();
 
-  const [selectedSchemeId, setSelectedSchemeId] = useState<string>(() => {
-    if (!initialScheme) return 'pm-kisan-001';
-    if ('id' in initialScheme && initialScheme.id) return initialScheme.id;
-    if ('scheme_id' in initialScheme && (initialScheme as SchemeMatchResult).scheme_id) {
-      return (initialScheme as SchemeMatchResult).scheme_id;
-    }
-    return 'pm-kisan-001';
-  });
+  // Active View Tab: 'audit' (New Audit Workspace) vs 'history' (Recent Checks from MongoDB)
+  const [activeTab, setActiveTab] = useState<'audit' | 'history'>('audit');
 
-  // Input Mode: 'camera' | 'upload'
-  const [inputMode, setInputMode] = useState<'camera' | 'upload'>('upload');
+  // Dynamic Schemes List from API
+  const [schemes, setSchemes] = useState<SchemeData[]>([]);
+  const [selectedSchemeId, setSelectedSchemeId] = useState<string>(initialSchemeId || 'pm-kisan-001');
 
-  // Camera State
-  const [cameraActive, setCameraActive] = useState<boolean>(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  // Multi-Document Staging State
+  const [stagedFiles, setStagedFiles] = useState<Array<{ file: File; previewUrl: string; id: string }>>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Camera Capture State
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // File Upload State
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Audit Progress & Result State
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [currentReport, setCurrentReport] = useState<KagazBatchAuditReport | null>(null);
 
-  // Processing & Results State
-  const [processing, setProcessing] = useState<boolean>(false);
-  const [processingStep, setProcessingStep] = useState<number>(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [latestResult, setLatestResult] = useState<DocumentAnalysisResult | null>(null);
-  const [schemeReadiness, setSchemeReadiness] = useState<SchemeReadinessAudit | null>(null);
-  const [auditHistory, setAuditHistory] = useState<DocumentAnalysisResult[]>([]);
+  // Audit History State from MongoDB Atlas
+  const [historyList, setHistoryList] = useState<KagazBatchAuditReport[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
 
-  // Document Specifications Catalog
-  const [docSpecs, setDocSpecs] = useState<DocumentTypeSpecification[]>([]);
+  // Supported Document Types Metadata
+  const [supportedDocs, setSupportedDocs] = useState<DocumentTypeSpecification[]>([]);
 
-  // Load Document Catalog on Mount
+  // 1. Fetch Schemes and Document Types on mount
   useEffect(() => {
-    async function loadCatalog() {
-      try {
-        const specs = await fetchSupportedDocumentTypes();
-        setDocSpecs(specs);
-      } catch (err) {
-        console.error('Failed to load document catalog:', err);
-      }
-    }
-    loadCatalog();
+    getPopularSchemes()
+      .then((data) => {
+        if (data && data.length > 0) setSchemes(data);
+      })
+      .catch((err) => console.warn('Could not fetch schemes list:', err));
+
+    fetchSupportedDocumentTypes()
+      .then((docs) => setSupportedDocs(docs || []))
+      .catch((err) => console.warn('Could not fetch doc types:', err));
+
+    loadHistory();
   }, []);
 
-  // Update selected scheme if initialScheme changes
+  // Sync initialSchemeId
   useEffect(() => {
-    if (initialScheme) {
-      if ('id' in initialScheme && initialScheme.id) {
-        setSelectedSchemeId(initialScheme.id);
-      } else if ('scheme_id' in initialScheme && (initialScheme as SchemeMatchResult).scheme_id) {
-        setSelectedSchemeId((initialScheme as SchemeMatchResult).scheme_id);
-      }
+    if (initialSchemeId) {
+      setSelectedSchemeId(initialSchemeId);
     }
-  }, [initialScheme]);
+  }, [initialSchemeId]);
 
-  // Handle Camera Initialization
-  const startCamera = async () => {
-    setCameraError(null);
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
     try {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach((t) => t.stop());
+      const res = await getKagazAuditHistory(user?.name || 'citizen', 30);
+      if (res && res.history) {
+        setHistoryList(res.history);
       }
+    } catch (err) {
+      console.warn('Could not load audit history:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const selectedScheme = schemes.find((s) => s.id === selectedSchemeId);
+
+  // Camera Handler
+  const startCamera = async () => {
+    setCameraActive(true);
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: cameraFacing },
+        audio: false,
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setCameraActive(true);
       }
     } catch (err) {
-      console.warn('Camera access error:', err);
-      setCameraError('Camera access unavailable or blocked. Please use file upload.');
+      console.error('Camera access failed:', err);
       setCameraActive(false);
     }
   };
@@ -129,823 +113,849 @@ export function KagazCheckAuditor({
   const stopCamera = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((t) => t.stop());
+      stream.getTracks().forEach((track) => track.stop());
       videoRef.current.srcObject = null;
     }
     setCameraActive(false);
   };
 
-  // Toggle Camera Facing
-  const toggleFacingMode = () => {
-    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
-  };
-
-  useEffect(() => {
-    if (inputMode === 'camera') {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => {
-      stopCamera();
-    };
-  }, [inputMode, facingMode]);
-
-  // Handle Snapshot from Camera
-  const captureSnapshot = () => {
+  const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const capturedFile = new File([blob], `camera_capture_${Date.now()}.jpg`, {
-          type: 'image/jpeg',
-        });
-        setSelectedFile(capturedFile);
-        setPreviewUrl(canvas.toDataURL('image/jpeg'));
-        stopCamera();
-        runAnalysis(capturedFile);
-      },
-      'image/jpeg',
-      0.9
-    );
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const previewUrl = URL.createObjectURL(file);
+        setStagedFiles((prev) => [...prev, { file, previewUrl, id: Math.random().toString(36).substring(2) }]);
+      }
+      stopCamera();
+    }, 'image/jpeg', 0.95);
   };
 
-  // Handle File Input Change
+  // File Upload Handlers
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      if (file.type.startsWith('image/')) {
-        setPreviewUrl(URL.createObjectURL(file));
-      } else {
-        setPreviewUrl(null);
-      }
-      runAnalysis(file);
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files).map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        id: Math.random().toString(36).substring(2),
+      }));
+      setStagedFiles((prev) => [...prev, ...newFiles]);
     }
   };
 
-  // Handle Drag & Drop
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      setSelectedFile(file);
-      if (file.type.startsWith('image/')) {
-        setPreviewUrl(URL.createObjectURL(file));
-      } else {
-        setPreviewUrl(null);
-      }
-      runAnalysis(file);
-    }
+  const removeStagedFile = (id: string) => {
+    setStagedFiles((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Sample Documents for Demo Testing
-  const handleLoadSample = (sampleType: string) => {
-    let sampleText = '';
-    let fileName = '';
-    const profName = citizenProfile?.gender === 'female' ? 'Anita Devi' : 'Satish Kumar';
-    const profState = citizenProfile?.state || 'Karnataka';
-
-    if (sampleType === 'aadhaar') {
-      sampleText = `GOVERNMENT OF INDIA\nUNIQUE IDENTIFICATION AUTHORITY OF INDIA\nName: ${profName}\nDOB: 15/08/1982\nGender: Male\nAddress: Tumakuru, ${profState} 572101\n9999 4105 7058\nMera Aadhaar, Meri Pehchan`;
-      fileName = 'Aadhaar_Card_Verified.pdf';
-    } else if (sampleType === 'land_record') {
-      sampleText = `Government of ${profState} Revenue Department - Bhoomi Record of Rights (ROR)\nSurvey No: 42/1A\nHissa No: 2\nTotal Extent: 2.50 Acres\nPattedar / Land Owner: ${profName}\nDistrict: Tumakuru\nVerified Land Parcel Record`;
-      fileName = 'Land_Record_ROR.pdf';
-    } else if (sampleType === 'bank_passbook') {
-      sampleText = `State Bank of India - Savings Bank Passbook\nAccount Holder: ${profName}\nA/C No: 38920192831\nIFSC Code: SBIN0001234\nBranch: Tumakuru Main\nAadhaar Seeded DBT Enabled`;
-      fileName = 'Bank_Passbook_SBI.pdf';
-    } else if (sampleType === 'expired_income') {
-      sampleText = `Government of ${profState} Revenue Department\nIncome Certificate\nApplicant Name: ${profName}\nAnnual Household Income: ₹1,80,000\nValid Upto: 10/01/2023\nTahsildar Officer Digital Seal`;
-      fileName = 'Expired_Income_Certificate.pdf';
-    }
-
-    const blob = new Blob([sampleText], { type: 'text/plain' });
-    const sampleFile = new File([blob], fileName, { type: 'text/plain' });
-    setSelectedFile(sampleFile);
-    setPreviewUrl(null);
-    runAnalysis(sampleFile);
+  const clearStagedFiles = () => {
+    setStagedFiles([]);
+    setCurrentReport(null);
+    setAuditError(null);
   };
 
-  // Core Audit Analysis Dispatcher
-  const runAnalysis = async (fileToAnalyze: File) => {
-    setProcessing(true);
-    setProcessingStep(1);
-    setErrorMessage(null);
+  // Execute Batch Multi-Document Audit
+  const runBatchAudit = async () => {
+    if (stagedFiles.length === 0) {
+      setAuditError('Please upload or capture at least one document to audit.');
+      return;
+    }
 
-    // Step 1: Preprocessing animation
-    setTimeout(() => setProcessingStep(2), 350);
-    // Step 2: OCR extraction animation
-    setTimeout(() => setProcessingStep(3), 700);
-    // Step 3: Deterministic Rules validation animation
-    setTimeout(() => setProcessingStep(4), 1050);
+    setIsAuditing(true);
+    setAuditError(null);
+    setCurrentReport(null);
+
+    const files = stagedFiles.map((s) => s.file);
+    const fileNames = stagedFiles.map((s) => s.file.name);
+
+    const citizenProfile: CitizenProfile = {
+      state: user?.state || 'Karnataka',
+      category: 'General/OBC',
+      gender: 'Male',
+      income_level: 'Low',
+      occupation: 'Small & Marginal Farmer',
+      landholding_acres: user?.landholding_acres ?? 3.5,
+      disability: false,
+      bpl_card: true,
+    };
+
+    const isCustom = selectedSchemeId.startsWith('custom:');
+    const customSchemeName = isCustom ? selectedSchemeId.replace(/^custom:/, '').trim() : undefined;
+    const activeSchemeId = isCustom ? undefined : (selectedSchemeId === 'general' ? undefined : selectedSchemeId);
+    const activeSchemeName = isCustom ? customSchemeName : (selectedScheme?.name || undefined);
 
     try {
-      const response: KagazCheckAnalyzeResponse = await analyzeDocument(
-        fileToAnalyze,
-        fileToAnalyze.name,
-        selectedSchemeId || undefined,
-        citizenProfile
+      const report = await analyzeBatchDocuments(
+        files,
+        fileNames,
+        activeSchemeId,
+        activeSchemeName,
+        citizenProfile,
+        user?.name || 'citizen'
       );
-
-      setLatestResult(response.document_result);
-      if (response.scheme_readiness) {
-        setSchemeReadiness(response.scheme_readiness);
-      }
-      setAuditHistory((prev) => [
-        response.document_result,
-        ...prev.filter((d) => d.document_type_code !== response.document_result.document_type_code),
-      ]);
-    } catch (err: unknown) {
-      let msg = 'Document analysis failed. Please check backend connection.';
-      if (err instanceof Error) msg = err.message;
-      setErrorMessage(msg);
+      setCurrentReport(report);
+      loadHistory(); // Refresh history
+    } catch (err: any) {
+      console.error('Batch audit failed:', err);
+      setAuditError(err?.response?.data?.detail || 'Failed to complete document audit. Please check your files.');
     } finally {
-      setProcessing(false);
-      setProcessingStep(0);
+      setIsAuditing(false);
     }
   };
 
-  const resetAuditor = () => {
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setLatestResult(null);
-    setErrorMessage(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (inputMode === 'camera') startCamera();
-  };
-
-  const getStatusBadge = (status: 'VALID' | 'WARNING' | 'INVALID' | 'EXPIRED') => {
-    switch (status) {
-      case 'VALID':
-        return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            <span>VALID</span>
-          </span>
-        );
-      case 'WARNING':
-        return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-            <span>WARNING</span>
-          </span>
-        );
-      case 'EXPIRED':
-      case 'INVALID':
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
-            <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
-            <span>{status}</span>
-          </span>
-        );
+  const handleDeleteHistory = async (auditId: string) => {
+    try {
+      await deleteKagazAuditById(auditId);
+      setHistoryList((prev) => prev.filter((item) => item.audit_id !== auditId));
+      if (currentReport?.audit_id === auditId) {
+        setCurrentReport(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete audit item:', err);
     }
   };
+
+  const handleClearAllHistory = async () => {
+    if (!confirm('Are you sure you want to clear all document audit history?')) return;
+    try {
+      await clearKagazAuditHistory(user?.name || 'citizen');
+      setHistoryList([]);
+      setCurrentReport(null);
+    } catch (err) {
+      console.error('Failed to clear history:', err);
+    }
+  };
+
+  // Scheme Dropdown Options
+  const schemeOptions = [
+    { value: 'general', label: 'General Document Audit (No specific scheme)', subLabel: 'Cross-verify identity and land title' },
+    ...schemes.map((s) => ({
+      value: s.id,
+      label: s.name,
+      subLabel: `${s.state || 'Central'} • ${s.benefit_amount || 'Direct Benefit'}`,
+    })),
+  ];
+
+  const filteredHistory = historyList.filter((item) => {
+    if (!historySearch) return true;
+    const q = historySearch.toLowerCase();
+    return (
+      (item.scheme_name || '').toLowerCase().includes(q) ||
+      (item.audit_id || '').toLowerCase().includes(q) ||
+      (item.ai_executive_summary || '').toLowerCase().includes(q)
+    );
+  });
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 text-left py-4">
-      {/* Header Banner */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200">
-            <Camera className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Multimodal Vision Document Auditor</span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-            KagazCheck Document Auditor
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Photograph identity records, land titles, and passbooks for deterministic statutory audit
-          </p>
-        </div>
-
-        {/* Scheme Context Selector */}
-        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-200 w-full sm:w-auto">
-          <Layers className="h-4 w-4 text-slate-500 shrink-0 ml-1" />
-          <div className="space-y-0.5">
-            <label className="text-[10px] font-bold text-slate-500 block uppercase">Target Scheme:</label>
-            <select
-              value={selectedSchemeId}
-              onChange={(e) => setSelectedSchemeId(e.target.value)}
-              className="text-xs font-bold text-slate-800 bg-transparent border-none focus:outline-none cursor-pointer pr-4"
-            >
-              <option value="pm-kisan-001">PM-KISAN (Income Support)</option>
-              <option value="pmay-g-002">PMAY-G (Rural Housing)</option>
-              <option value="pmmvy-003">PMMVY (Maternity Support)</option>
-              <option value="pm-jay-004">Ayushman Bharat (PM-JAY)</option>
-              <option value="raitha-vidya-005">Raitha Vidya Nidhi</option>
-              {availableSchemes.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Citizen Privacy Assurance Banner */}
-      <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2.5">
-        <ShieldCheck className="h-4 w-4 text-emerald-700 shrink-0 mt-0.5" />
-        <div className="space-y-0.5">
-          <p className="font-bold">Statutory Privacy &amp; PII Protection</p>
-          <p className="text-emerald-900 leading-relaxed text-[11px]">
-            KagazCheck masks sensitive personal identifiers (Aadhaar UID, Bank A/C) in-memory using statutory UIDAI privacy guidelines. Raw images are processed temporarily without permanent server storage.
-          </p>
-        </div>
-      </div>
-
-      {/* Quick Demo Test Samples Banner */}
-      <div className="bg-slate-100/80 p-4 rounded-2xl border border-slate-200 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-            Quick Demo Document Samples:
-          </span>
-          <span className="text-[10px] text-slate-500">Tap to audit instantly</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div className="space-y-6 text-left">
+      {/* 1. TOP TAB WORKSPACE SWITCHER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 bg-slate-100/80 rounded-2xl border border-slate-200">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => handleLoadSample('aadhaar')}
-            disabled={processing}
-            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-slate-700 transition cursor-pointer shadow-2xs"
+            onClick={() => setActiveTab('audit')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'audit'
+                ? 'bg-white text-slate-900 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
-            📄 Aadhaar Card (Valid)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleLoadSample('land_record')}
-            disabled={processing}
-            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-slate-700 transition cursor-pointer shadow-2xs"
-          >
-            🌾 Land Record (RoR / Khasra)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleLoadSample('bank_passbook')}
-            disabled={processing}
-            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-slate-700 transition cursor-pointer shadow-2xs"
-          >
-            🏦 Bank Passbook (SBI IFSC)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleLoadSample('expired_income')}
-            disabled={processing}
-            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-rose-200 hover:border-rose-500 hover:bg-rose-50 text-rose-800 transition cursor-pointer shadow-2xs"
-          >
-            ⚠️ Expired Certificate (Demo)
-          </button>
-        </div>
-      </div>
-
-      {/* Main Audit Studio Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Capture & Ingestion */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
-            {/* Mode Switcher Buttons */}
-            <div className="flex p-1 bg-slate-100 rounded-2xl">
-              <button
-                type="button"
-                onClick={() => setInputMode('camera')}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  inputMode === 'camera'
-                    ? 'bg-white text-emerald-800 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Camera className="h-3.5 w-3.5" />
-                <span>Live Camera</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputMode('upload')}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  inputMode === 'upload'
-                    ? 'bg-white text-emerald-800 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <UploadCloud className="h-3.5 w-3.5" />
-                <span>Upload File / PDF</span>
-              </button>
-            </div>
-
-            {/* CAMERA CAPTURE VIEW */}
-            {inputMode === 'camera' && (
-              <div className="space-y-4">
-                <div className="relative rounded-2xl overflow-hidden bg-slate-950 aspect-4/3 flex items-center justify-center border border-slate-800">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                  <canvas ref={canvasRef} className="hidden" />
-
-                  {/* Document Alignment Frame Overlay */}
-                  <div className="absolute inset-4 border-2 border-dashed border-emerald-400/70 rounded-xl pointer-events-none flex flex-col justify-between p-3">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] bg-black/60 text-emerald-300 font-mono px-2 py-0.5 rounded">
-                        KagazCheck Viewfinder
-                      </span>
-                      <button
-                        type="button"
-                        onClick={toggleFacingMode}
-                        className="pointer-events-auto p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 transition"
-                        title="Switch Front/Back Camera"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <span className="text-[10px] text-center text-white/90 bg-black/50 py-1 rounded">
-                      Fit document borders inside frame
-                    </span>
-                  </div>
-
-                  {cameraError && (
-                    <div className="absolute inset-0 bg-slate-900/90 p-6 flex flex-col items-center justify-center text-center text-white space-y-2">
-                      <AlertCircle className="h-8 w-8 text-rose-400" />
-                      <p className="text-xs">{cameraError}</p>
-                      <button
-                        type="button"
-                        onClick={() => setInputMode('upload')}
-                        className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl font-bold mt-2"
-                      >
-                        Switch to File Upload
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {cameraActive && (
-                  <button
-                    type="button"
-                    onClick={captureSnapshot}
-                    disabled={processing}
-                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Camera className="h-4 w-4" />
-                    <span>Capture &amp; Audit Document</span>
-                  </button>
-                )}
-              </div>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Multi-Document Auditor</span>
+            {stagedFiles.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-slate-900 text-white rounded-full text-[10px]">
+                {stagedFiles.length}
+              </span>
             )}
+          </button>
 
-            {/* FILE UPLOAD VIEW */}
-            {inputMode === 'upload' && (
-              <div
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/30 rounded-2xl p-8 text-center cursor-pointer transition space-y-3"
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,application/pdf,.txt"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-
-                <div className="h-12 w-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-                  <UploadCloud className="h-6 w-6" />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-slate-800">
-                    Click to browse or drag &amp; drop document
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Supports Photos (JPEG, PNG, WebP) and PDF certificates (Max 10MB)
-                  </p>
-                </div>
-
-                {selectedFile && (
-                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-xs font-medium text-slate-700 flex items-center justify-between">
-                    <span className="truncate max-w-[200px]">{selectedFile.name}</span>
-                    <span className="text-[10px] text-slate-500">
-                      {Math.round(selectedFile.size / 1024)} KB
-                    </span>
-                  </div>
-                )}
-              </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('history');
+              loadHistory();
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'history'
+                ? 'bg-white text-slate-900 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Recent Audits &amp; Vault</span>
+            {historyList.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-slate-200 text-slate-800 rounded-full text-[10px]">
+                {historyList.length}
+              </span>
             )}
+          </button>
+        </div>
 
-            {/* Preview Thumbnail if available */}
-            {previewUrl && (
-              <div className="relative rounded-xl overflow-hidden border border-slate-200 aspect-16/9 bg-slate-100 flex items-center justify-center">
-                <img src={previewUrl} alt="Captured Document" className="w-full h-full object-contain" />
+        <div className="flex items-center gap-2 px-2 text-xs font-mono text-slate-500">
+          <span>Statutory Document Validation &amp; Digital Vault</span>
+        </div>
+      </div>
+
+      {activeTab === 'audit' ? (
+        /* ------------------------------------------------------------- */
+        /* TAB 1: MULTI-DOCUMENT AUDIT WORKSPACE                        */
+        /* ------------------------------------------------------------- */
+        <div className="space-y-6">
+          {/* Target Scheme Selection */}
+          <div className="p-6 rounded-2xl border border-slate-200 bg-white space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="space-y-0.5">
+                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-bold font-mono uppercase tracking-wider">
+                  STEP 1: SELECT STATUTORY TARGET SCHEME
+                </span>
+                <h2 className="text-base sm:text-lg font-black text-slate-900">
+                  Choose Welfare Scheme or Enter Custom Scheme
+                </h2>
+              </div>
+
+              {/* Toggle between Catalog Dropdown and Custom Input */}
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl text-xs">
                 <button
                   type="button"
-                  onClick={resetAuditor}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition"
-                  title="Remove image"
+                  onClick={() => {
+                    if (selectedSchemeId.startsWith('custom:')) setSelectedSchemeId('pm-kisan-001');
+                  }}
+                  className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                    !selectedSchemeId.startsWith('custom:')
+                      ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  Verified Catalog (25+)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedSchemeId.startsWith('custom:')) setSelectedSchemeId('custom:');
+                  }}
+                  className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                    selectedSchemeId.startsWith('custom:')
+                      ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  + Custom Scheme
                 </button>
               </div>
-            )}
+            </div>
 
-            {/* Active Processing Step Pipeline */}
-            {processing && (
-              <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-3">
-                <div className="flex items-center gap-2 text-emerald-950 font-bold text-xs">
-                  <Sparkles className="h-4 w-4 text-emerald-600 animate-spin" />
-                  <span>Multimodal Document Processing...</span>
-                </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              KagazCheck automatically evaluates your documents against the specific statutory rules, land limits, and Aadhaar DBT seeding requirements of this scheme.
+            </p>
 
-                <div className="space-y-2 text-[11px]">
-                  <div
-                    className={`flex items-center gap-2 ${
-                      processingStep >= 1 ? 'text-emerald-800 font-semibold' : 'text-slate-400'
-                    }`}
-                  >
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        processingStep >= 1 ? 'bg-emerald-600' : 'bg-slate-300'
-                      }`}
-                    />
-                    <span>1. Image Quality &amp; Sharpness Analysis</span>
-                  </div>
-
-                  <div
-                    className={`flex items-center gap-2 ${
-                      processingStep >= 2 ? 'text-emerald-800 font-semibold' : 'text-slate-400'
-                    }`}
-                  >
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        processingStep >= 2 ? 'bg-emerald-600' : 'bg-slate-300'
-                      }`}
-                    />
-                    <span>2. Multimodal OCR &amp; Field Extraction</span>
-                  </div>
-
-                  <div
-                    className={`flex items-center gap-2 ${
-                      processingStep >= 3 ? 'text-emerald-800 font-semibold' : 'text-slate-400'
-                    }`}
-                  >
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        processingStep >= 3 ? 'bg-emerald-600' : 'bg-slate-300'
-                      }`}
-                    />
-                    <span>3. Deterministic Verhoeff &amp; Statutory Validation</span>
-                  </div>
-
-                  <div
-                    className={`flex items-center gap-2 ${
-                      processingStep >= 4 ? 'text-emerald-800 font-semibold' : 'text-slate-400'
-                    }`}
-                  >
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        processingStep >= 4 ? 'bg-emerald-600' : 'bg-slate-300'
-                      }`}
-                    />
-                    <span>4. Citizen Profile &amp; Scheme Readiness Synthesis</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {errorMessage && (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5">
-                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">Audit Error</p>
-                  <p className="mt-0.5">{errorMessage}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Session Audited Documents Pills */}
-            {auditHistory.length > 0 && (
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-slate-700 uppercase tracking-wider">
-                    Audited in this Session ({auditHistory.length}):
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">In-Memory Cache</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {auditHistory.map((item, idx) => (
+            {selectedSchemeId.startsWith('custom:') ? (
+              /* Direct Custom Scheme Input Mode */
+              <div className="space-y-2 max-w-2xl">
+                <label className="block text-[10px] font-bold uppercase tracking-wider font-mono text-slate-500">
+                  Enter Custom Scheme Name or Government Program
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={selectedSchemeId.replace(/^custom:/, '')}
+                    onChange={(e) => setSelectedSchemeId(`custom:${e.target.value}`)}
+                    placeholder="e.g. Karnataka Ganga Kalyana Scheme, UP Kisan Karj Mafi, PM Vishwakarma..."
+                    className="flex-1 h-10 px-3.5 text-xs sm:text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-800 transition shadow-2xs text-slate-900"
+                    autoFocus
+                  />
+                  {selectedSchemeId !== 'custom:' && (
                     <button
-                      key={idx}
                       type="button"
-                      onClick={() => setLatestResult(item)}
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border transition flex items-center gap-1 cursor-pointer ${
-                        latestResult?.document_id === item.document_id
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-500'
-                      }`}
+                      onClick={() => setSelectedSchemeId('pm-kisan-001')}
+                      className="h-10 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold transition cursor-pointer"
                     >
-                      <span>✓ {item.document_type}</span>
+                      Reset
                     </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono pt-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>Statutory document requirements will be discovered and verified automatically.</span>
+                </div>
+              </div>
+            ) : (
+              /* Comprehensive Catalog Dropdown with Custom Search */
+              <div className="max-w-2xl space-y-1.5">
+                <CustomDropdown
+                  label="Target Government Welfare Program (25+ Programs Available)"
+                  value={selectedSchemeId}
+                  onChange={(val) => {
+                    if (!schemes.some((s) => s.id === val) && val !== 'general') {
+                      setSelectedSchemeId(`custom:${val}`);
+                    } else {
+                      setSelectedSchemeId(val);
+                    }
+                  }}
+                  options={schemeOptions}
+                  searchable={true}
+                  allowCustom={true}
+                  placeholder="Select scheme or type to add custom program..."
+                />
+                <span className="text-[10px] text-slate-400 font-mono block">
+                  Tip: Type in the search box to add any custom central or state scheme.
+                </span>
+              </div>
+            )}
+
+            {/* Scheme Required Documents Checklist Preview */}
+            {selectedScheme && !selectedSchemeId.startsWith('custom:') && (
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider block">
+                  STATUTORY REQUIRED DOCUMENTS FOR {selectedScheme.name}:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {selectedScheme.required_documents?.map((doc, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                    >
+                      <span className="text-slate-400 font-bold">•</span>
+                      <span>{doc}</span>
+                    </span>
                   ))}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Supported Documents Quick Reference */}
-          {docSpecs.length > 0 && (
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-3">
-              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Recognized Documents Catalog</span>
-              </h4>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                {docSpecs.slice(0, 6).map((d) => (
-                  <div key={d.code} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                    <p className="font-bold text-slate-800 truncate">{d.name}</p>
-                    <p className="text-[10px] text-slate-500 line-clamp-1">{d.description}</p>
-                  </div>
-                ))}
+          {/* Document Staging & Camera Station */}
+          <div className="p-6 rounded-2xl border border-slate-200 bg-white space-y-5 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="space-y-0.5">
+                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-bold font-mono uppercase tracking-wider">
+                  STEP 2: UPLOAD OR CAPTURE MULTIPLE DOCUMENTS
+                </span>
+                <h3 className="text-base font-bold text-slate-900">
+                  Upload Scans, Photos, or PDFs (Stored in Secure Digital Vault)
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Select Files</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={cameraActive ? stopCamera : startCamera}
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-semibold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>{cameraActive ? 'Close Camera' : 'Use Camera'}</span>
+                </button>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Right Column: Audit Results & Readiness Checklist */}
-        <div className="lg:col-span-7 space-y-6">
-          {latestResult ? (
+            {/* Hidden Multi-file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+
+            {/* Live Camera Viewfinder */}
+            {cameraActive && (
+              <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                <div className="relative aspect-video max-h-80 bg-black rounded-xl overflow-hidden flex items-center justify-center">
+                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 border-2 border-dashed border-white/30 pointer-events-none m-6 rounded-lg" />
+                </div>
+
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    <span>Capture Document</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Staged Documents Preview Tray */}
+            {stagedFiles.length === 0 ? (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="p-10 rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-400 bg-slate-50/50 hover:bg-slate-50 text-center space-y-3 transition cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mx-auto text-slate-400 shadow-2xs">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-800">
+                    Click to select or drag &amp; drop multiple documents (Aadhaar, Land RTC, Passbook, etc.)
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Supports PNG, JPG, JPEG, WebP, and digital PDFs up to 15MB each
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-slate-700">
+                    {stagedFiles.length} Document{stagedFiles.length > 1 ? 's' : ''} Staged for Audit
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearStagedFiles}
+                    className="text-[11px] font-mono text-slate-500 hover:text-red-600 transition cursor-pointer"
+                  >
+                    [ Clear All ]
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {stagedFiles.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white transition flex flex-col justify-between space-y-2.5 shadow-2xs group relative"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-[10px] font-mono font-bold">
+                          #{idx + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeStagedFile(item.id)}
+                          className="w-5 h-5 rounded-md bg-slate-200 hover:bg-red-100 hover:text-red-700 text-slate-600 text-xs flex items-center justify-center transition cursor-pointer"
+                          title="Remove file"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="aspect-4/3 bg-slate-200 rounded-lg overflow-hidden flex items-center justify-center">
+                        {item.file.type === 'application/pdf' ? (
+                          <div className="text-center p-2 space-y-1">
+                            <span className="text-lg">📄</span>
+                            <p className="text-[10px] font-mono text-slate-600 font-bold truncate max-w-[120px]">
+                              {item.file.name}
+                            </p>
+                          </div>
+                        ) : (
+                          <img src={item.previewUrl} alt={item.file.name} className="w-full h-full object-cover" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">
+                          {item.file.name}
+                        </p>
+                        <span className="text-[10px] font-mono text-slate-400 block">
+                          {(item.file.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Audit Run Button */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <span className="text-xs text-slate-500">
+                    Target: <span className="font-bold text-slate-800">{selectedScheme?.name || 'General Welfare Audit'}</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={isAuditing}
+                    onClick={runBatchAudit}
+                    className="h-11 px-6 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    {isAuditing ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Validating Statutory Documents...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Run Statutory Audit ({stagedFiles.length} Documents) →</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Audit Error Message */}
+          {auditError && (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 space-y-1">
+              <span className="font-bold">Audit Error</span>
+              <p>{auditError}</p>
+            </div>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* COMPLETE AUDIT REPORT VISUALIZATION                          */}
+          {/* ------------------------------------------------------------- */}
+          {currentReport && (
             <div className="space-y-6">
-              {/* Top Result Card */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              {/* Executive Readiness Score Header */}
+              <div className="p-6 sm:p-8 rounded-2xl border border-slate-200 bg-white space-y-5 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                   <div className="space-y-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Document Audit Outcome
+                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-bold font-mono uppercase tracking-wider">
+                      STATUTORY AUDIT REPORT • ID: {currentReport.audit_id}
                     </span>
-                    <h3 className="text-lg font-extrabold text-slate-900">
-                      {latestResult.document_type}
+                    <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                      {currentReport.scheme_name}
                     </h3>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {getStatusBadge(latestResult.overall_status as any)}
-                    <button
-                      type="button"
-                      onClick={resetAuditor}
-                      className="p-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 transition cursor-pointer"
-                      title="Audit Another Document"
+                    <span className="text-xs font-mono text-slate-400">
+                      {new Date(currentReport.created_at).toLocaleDateString()} • {currentReport.execution_time_ms}ms
+                    </span>
+                  </div>
+                </div>
+
+                {/* Score & Verdict Banner */}
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-slate-900 text-white flex flex-col items-center justify-center font-black shadow-xs shrink-0">
+                      <span className="text-xl leading-none">{currentReport.overall_readiness_pct}%</span>
+                      <span className="text-[9px] font-mono text-slate-400 uppercase mt-0.5">Score</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-[10px] font-bold font-mono">
+                          VERDICT: {currentReport.verdict.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-700 max-w-xl leading-relaxed">
+                        {currentReport.ai_executive_summary}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Parchaa Form Action */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    <Link
+                      href={`/dashboard/parchaa?scheme=${currentReport.scheme_id || 'pm-kisan-001'}`}
+                      className="h-10 px-5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                     >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </button>
+                      <span>Proceed to Parchaa Form</span>
+                      <span>→</span>
+                    </Link>
                   </div>
                 </div>
 
-                {/* Audit Attributes Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-0.5">
-                    <span className="text-[10px] font-semibold text-slate-500">Detected</span>
-                    <p className="font-bold text-slate-900">
-                      {latestResult.is_detected ? '✓ Yes' : '✗ Unknown'}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-0.5">
-                    <span className="text-[10px] font-semibold text-slate-500">Legibility</span>
-                    <p className="font-bold text-slate-900">
-                      {latestResult.is_readable ? `✓ ${latestResult.image_quality_score}% Quality` : '✗ Low / Unreadable'}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-0.5">
-                    <span className="text-[10px] font-semibold text-slate-500">Statutory Validity</span>
-                    <p className="font-bold text-slate-900">{latestResult.validity_status}</p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-0.5">
-                    <span className="text-[10px] font-semibold text-slate-500">Citizen Profile</span>
-                    <p className="font-bold text-slate-900">
-                      {latestResult.citizen_details_match === 'MATCH'
-                        ? '✓ Matched'
-                        : latestResult.citizen_details_match === 'PARTIAL_MATCH'
-                        ? '⚠ Partial'
-                        : latestResult.citizen_details_match}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Field-by-Field Verification Breakdown */}
-                {latestResult.fields_validation.length > 0 && (
-                  <div className="space-y-2.5">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Deterministic Field Verification
-                    </h4>
-                    <div className="space-y-2">
-                      {latestResult.fields_validation.map((field, idx) => (
+                {/* Cross-Document Consistency Matrix */}
+                {currentReport.cross_document_matches && currentReport.cross_document_matches.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">
+                      CROSS-DOCUMENT RECONCILIATION &amp; VALIDATIONS:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {currentReport.cross_document_matches.map((item, mIdx) => (
                         <div
-                          key={idx}
-                          className={`p-3 rounded-2xl border text-xs flex items-start justify-between gap-3 ${
-                            field.is_valid
-                              ? 'bg-emerald-50/40 border-emerald-200 text-emerald-950'
-                              : 'bg-rose-50/50 border-rose-200 text-rose-950'
-                          }`}
+                          key={mIdx}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1.5 shadow-2xs"
                         >
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5">
-                              {field.is_valid ? (
-                                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                              ) : (
-                                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
-                              )}
-                              <span className="font-bold">{field.label}</span>
-                            </div>
-                            <p className="text-[11px] text-slate-600">{field.rule_description}</p>
-                            {field.issue_reason && (
-                              <p className="text-[11px] font-semibold text-rose-700">
-                                Issue: {field.issue_reason}
-                              </p>
-                            )}
-                          </div>
-
-                          {field.extracted_value && (
-                            <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 shrink-0">
-                              {field.extracted_value}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-900">{item.parameter}</span>
+                            <span
+                              className={`px-2 py-0.2 rounded text-[10px] font-mono font-bold ${
+                                item.status === 'MATCHED'
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}
+                            >
+                              {item.status}
                             </span>
-                          )}
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            {item.details}
+                          </p>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Citizen Profile Match Items */}
-                {latestResult.profile_match_details.length > 0 && (
-                  <div className="p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-200 text-xs space-y-1.5">
-                    <span className="font-bold text-indigo-950 flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
-                      Cross-Matching with Citizen Profile ({citizenProfile?.gender === 'female' ? 'Anita Devi' : 'Satish Kumar'}):
+                {/* Required Documents Checklist */}
+                {currentReport.required_documents_checklist && currentReport.required_documents_checklist.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">
+                      STATUTORY DOCUMENT CHECKLIST:
                     </span>
-                    <ul className="space-y-1 text-[11px] text-indigo-900">
-                      {latestResult.profile_match_details.map((m, idx) => (
-                        <li key={idx} className="flex items-center gap-1.5">
-                          <span>{m.matched ? '✓' : '✗'}</span>
-                          <span>{m.details}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {currentReport.required_documents_checklist.map((chk, cIdx) => (
+                        <div
+                          key={cIdx}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-2 text-xs font-semibold ${
+                            chk.is_present
+                              ? 'bg-slate-50 border-slate-200 text-slate-800'
+                              : 'bg-red-50/50 border-red-200 text-red-800'
+                          }`}
+                        >
+                          <span className="truncate">{chk.document_requirement}</span>
+                          <span className="text-[10px] font-mono shrink-0">
+                            {chk.is_present ? '✓ Verified' : '✕ Missing'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actionable Recommendations */}
+                {currentReport.actionable_recommendations && currentReport.actionable_recommendations.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">
+                      CITIZEN REMEDIATION GUIDANCE:
+                    </span>
+                    <ul className="space-y-1.5">
+                      {currentReport.actionable_recommendations.map((rec, rIdx) => (
+                        <li key={rIdx} className="flex items-start gap-2 text-xs text-slate-700 leading-relaxed">
+                          <span className="text-emerald-700 font-bold select-none">•</span>
+                          <span>{rec}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
-
-                {/* Actionable Next Step Banner */}
-                {latestResult.recommended_action && (
-                  <div className="p-4 rounded-2xl bg-slate-900 text-white text-xs flex items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                        Recommended Next Action:
-                      </span>
-                      <p className="text-slate-200">{latestResult.recommended_action}</p>
-                    </div>
-                    {schemeReadiness?.is_ready_to_apply && onApplyForScheme && (
-                      <button
-                        type="button"
-                        onClick={() => onApplyForScheme(selectedSchemeId)}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-xs transition flex items-center gap-1 shrink-0 cursor-pointer"
-                      >
-                        <span>Proceed to Apply</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
 
-              {/* Scheme Readiness Dossier Checklist */}
-              {schemeReadiness && (
-                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                    <div>
-                      <h4 className="font-extrabold text-sm text-slate-900">
-                        {schemeReadiness.scheme_name} — Application Readiness
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Statutory documents required for scheme filing
-                      </p>
-                    </div>
+              {/* Uploaded Documents & Digital Vault Grid */}
+              <div className="space-y-3">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700">
+                  Audited Documents &amp; Verified Scans ({currentReport.documents.length})
+                </span>
 
-                    <div className="text-right">
-                      <span className="text-xs font-extrabold text-slate-800">
-                        {schemeReadiness.ready_docs_count} of {schemeReadiness.total_required_docs} Ready ({schemeReadiness.readiness_percentage}%)
-                      </span>
-                      <div className="w-36 bg-slate-100 h-2 rounded-full mt-1.5 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            schemeReadiness.readiness_percentage === 100
-                              ? 'bg-emerald-600'
-                              : schemeReadiness.readiness_percentage >= 50
-                              ? 'bg-amber-500'
-                              : 'bg-rose-500'
-                          }`}
-                          style={{ width: `${schemeReadiness.readiness_percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Checklist Items */}
-                  <div className="space-y-2.5">
-                    {schemeReadiness.checklist.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
-                          item.status === 'VALID'
-                            ? 'bg-emerald-50/50 border-emerald-200'
-                            : item.status === 'WARNING'
-                            ? 'bg-amber-50/50 border-amber-200'
-                            : 'bg-slate-50 border-slate-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {item.status === 'VALID' ? (
-                            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-                          ) : item.status === 'WARNING' ? (
-                            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-                          ) : (
-                            <div className="h-5 w-5 rounded-full border-2 border-slate-300 shrink-0" />
-                          )}
-
-                          <div className="space-y-0.5">
-                            <span className="text-xs font-bold text-slate-900">
-                              {item.document_name}
-                            </span>
-                            <p className="text-[11px] text-slate-500">{item.details}</p>
-                          </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {currentReport.documents.map((doc, dIdx) => (
+                    <div
+                      key={doc.doc_id || dIdx}
+                      className="p-5 rounded-2xl border border-slate-200 bg-white space-y-4 shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                        <div className="space-y-0.5 min-w-0">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-mono font-bold uppercase">
+                            {doc.detected_type.replace(/_/g, ' ')}
+                          </span>
+                          <h4 className="text-xs font-bold text-slate-900 truncate">
+                            {doc.file_name}
+                          </h4>
                         </div>
 
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                            item.status === 'VALID'
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                              : item.status === 'WARNING'
-                              ? 'bg-amber-100 text-amber-800 border-amber-200'
-                              : 'bg-slate-200/80 text-slate-700 border-slate-300'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
+                        {doc.cloudinary_url && (
+                          <a
+                            href={doc.cloudinary_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[10px] font-bold font-mono text-slate-700 transition flex items-center gap-1 shadow-2xs shrink-0"
+                          >
+                            <span>View Scan</span>
+                            <span>↗</span>
+                          </a>
+                        )}
                       </div>
-                    ))}
-                  </div>
 
-                  {/* Overall Readiness Recommendation */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-center gap-2">
-                    <Info className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>{schemeReadiness.overall_recommendation}</span>
-                  </div>
+                      {/* Extracted Fields Table */}
+                      {doc.extracted_fields && Object.keys(doc.extracted_fields).length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-mono text-slate-400 uppercase block font-bold">
+                            Extracted Statutory Fields:
+                          </span>
+                          <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            {Object.entries(doc.extracted_fields).map(([k, v]) => (
+                              <div key={k} className="truncate">
+                                <span className="text-[10px] text-slate-400 block uppercase font-mono truncate">{k}:</span>
+                                <span className="font-bold text-slate-800 truncate block">{String(v)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-                  {/* Parchaa Generation Action Button */}
-                  {onGenerateParchaa && (
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={() => onGenerateParchaa(selectedSchemeId)}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <FileText className="h-3.5 w-3.5 text-emerald-400" />
-                        <span>Generate Application Parchaa (with Audit Readiness)</span>
-                      </button>
+                      {/* Validation Issues / Checklist */}
+                      {doc.issues && doc.issues.length > 0 ? (
+                        <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 space-y-1 text-xs text-amber-800">
+                          <span className="font-bold text-[10px] uppercase font-mono">Issues Detected:</span>
+                          <ul className="space-y-0.5">
+                            {doc.issues.map((iss, iIdx) => (
+                              <li key={iIdx} className="text-[11px]">• {iss}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-800 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          <span>All deterministic checksums &amp; formats verified</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              )}
-
-            </div>
-          ) : (
-            /* Empty State */
-            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-4 shadow-xs">
-              <div className="h-16 w-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
-                <FileCheck className="h-8 w-8" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-extrabold text-base text-slate-900">
-                  Ready for Document Ingestion &amp; Audit
-                </h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                  Take a photo using the live camera on the left, upload a PDF/image, or tap one of the quick demo buttons above to see deterministic statutory verification in action.
-                </p>
               </div>
             </div>
           )}
         </div>
-      </div>
+      ) : (
+        /* ------------------------------------------------------------- */
+        /* TAB 2: RECENT AUDITS HISTORY (FROM SECURE VAULT)              */
+        /* ------------------------------------------------------------- */
+        <div className="space-y-5">
+          <div className="p-6 rounded-2xl border border-slate-200 bg-white space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="space-y-0.5">
+                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-bold font-mono uppercase tracking-wider">
+                  SECURE AUDIT VAULT
+                </span>
+                <h2 className="text-base sm:text-lg font-black text-slate-900">
+                  Citizen Document Audit History
+                </h2>
+              </div>
+
+              {historyList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllHistory}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-red-50 hover:text-red-700 text-slate-600 text-xs font-semibold transition cursor-pointer"
+                >
+                  Clear All History
+                </button>
+              )}
+            </div>
+
+            {/* Filter Search */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Search audit by scheme name, ID, or keywords..."
+                className="flex-1 h-10 px-3.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-800 transition shadow-2xs text-slate-900"
+              />
+              <button
+                type="button"
+                onClick={loadHistory}
+                className="h-10 px-4 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer shrink-0"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* History List */}
+          {isLoadingHistory ? (
+            <div className="p-12 rounded-2xl border border-slate-200 bg-white text-center space-y-2">
+              <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-slate-400 font-mono">Loading saved audit history...</p>
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="p-12 rounded-2xl border border-slate-200 bg-white text-center space-y-2 shadow-xs">
+              <span className="text-xs font-bold uppercase text-slate-900 block">
+                No past audit records found
+              </span>
+              <p className="text-xs text-slate-500">
+                Run a document audit from the "Multi-Document Auditor" tab to save reports here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredHistory.map((item) => (
+                <div
+                  key={item.audit_id}
+                  className="p-5 rounded-2xl border border-slate-200 hover:border-slate-400 bg-white transition flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs group"
+                >
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-mono font-bold">
+                        {item.overall_readiness_pct}% Ready
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-mono font-semibold">
+                        {item.documents_count} Document{item.documents_count > 1 ? 's' : ''}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {new Date(item.created_at).toLocaleDateString()} • ID: {item.audit_id}
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-slate-900 truncate">
+                      {item.scheme_name}
+                    </h3>
+
+                    <p className="text-xs text-slate-500 line-clamp-1 leading-relaxed">
+                      {item.ai_executive_summary}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentReport(item);
+                        setActiveTab('audit');
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                    >
+                      <span>View Report</span>
+                      <span>→</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHistory(item.audit_id)}
+                      className="w-9 h-9 rounded-xl border border-slate-200 hover:bg-red-50 hover:text-red-700 text-slate-500 text-xs flex items-center justify-center transition cursor-pointer shadow-2xs"
+                      title="Delete audit record"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,13 +1,10 @@
+'use client';
+
 import {
-  CheckCircle2,
-  XCircle,
-  Building2,
-  FileText,
-  ExternalLink,
-  ChevronRight,
-  Sparkles,
-} from 'lucide-react';
-import type { SchemeData, SchemeMatchResult } from '../services/api';
+  type SchemeData,
+  type SchemeMatchResult,
+} from '../services/api';
+import { SchemeImage } from './SchemeImage';
 
 interface SchemeCardProps {
   scheme: SchemeData | SchemeMatchResult;
@@ -26,172 +23,108 @@ export function SchemeCard({
   const isEligible = matchResult?.eligible_status ?? false;
   const matchScore = matchResult?.match_score ?? null;
 
+  const schemeId = 'id' in scheme ? scheme.id : scheme.scheme_id;
   const schemeName = 'name' in scheme ? scheme.name : scheme.scheme_name;
   const shortDesc = scheme.short_description;
   const benefits = scheme.benefits || [];
-  const requiredDocs = scheme.required_documents || [];
   const category = ('category' in scheme && scheme.category) ? scheme.category : 'General Welfare';
   const state = ('state' in scheme && scheme.state) ? scheme.state : 'Central Government';
+  const sourceUrl = scheme.official_source_url;
+
+  const domain = sourceUrl ? new URL(sourceUrl).hostname.replace('www.', '') : 'india.gov.in';
+  const benefitAmount = ('benefit_amount' in scheme && (scheme as any).benefit_amount)
+    ? (scheme as any).benefit_amount
+    : (benefits.length > 0 ? benefits[0] : null);
 
   return (
     <div
-      className={`bg-white rounded-2xl border transition-all duration-200 p-6 flex flex-col justify-between hover:shadow-md ${
-        isMatchedView
-          ? isEligible
-            ? 'border-emerald-300 ring-1 ring-emerald-500/10 shadow-xs'
-            : 'border-slate-200/90 bg-slate-50/50'
-          : 'border-slate-200 shadow-xs'
+      className={`p-0 overflow-hidden card-saas flex flex-col justify-between transition-all duration-200 text-left ${
+        isMatchedView && isEligible
+          ? 'border-[#10b981]/50 ring-1 ring-[#10b981]/20 shadow-sm'
+          : ''
       }`}
     >
-      <div className="space-y-4">
-        {/* Top Badges */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-              {state}
-            </span>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-100">
-              {category}
-            </span>
+      <div>
+        {/* Photography Banner */}
+        <div className="relative h-44 w-full overflow-hidden bg-muted rounded-t-[0.875rem]">
+          <SchemeImage
+            schemeId={schemeId}
+            category={category}
+            alt={schemeName}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+
+          {/* Overlaid Badges */}
+          <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+            <div className="flex items-center gap-1.5">
+              <span className="badge-saas bg-black/70 text-white border-white/30 text-[8px]">
+                {state}
+              </span>
+              <span className="badge-saas bg-black/70 text-white border-white/30 text-[8px]">
+                {category.split('&')[0]}
+              </span>
+            </div>
+
+            {matchScore !== null && (
+              <div>
+                {isEligible ? (
+                  <span className="badge-saas badge-saas-active text-[8px]">
+                    100% ELIGIBLE
+                  </span>
+                ) : (
+                  <span className="badge-saas bg-black/70 text-white border-white/30 text-[8px]">
+                    {matchScore}% MATCH
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
-          {matchScore !== null && (
-            <div>
-              {isEligible ? (
-                <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white shadow-xs">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Eligible (100%)</span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700">
-                  <XCircle className="h-3.5 w-3.5 text-rose-500" />
-                  <span>{matchScore}% Match</span>
-                </span>
-              )}
-            </div>
-          )}
+          <div className="absolute bottom-3 left-3 right-3 text-white">
+            <h3 className="font-bold text-sm leading-tight text-white line-clamp-1">
+              {schemeName}
+            </h3>
+          </div>
         </div>
 
-        {/* Title & Description */}
-        <div className="space-y-1.5">
-          <h3 className="font-bold text-base text-slate-900 leading-snug line-clamp-2">
-            {schemeName}
-          </h3>
-          <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
+        {/* Card Body Details */}
+        <div className="p-5 space-y-3">
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed font-sans-sleek">
             {shortDesc}
           </p>
-        </div>
 
-        {/* Rule Breakdown for Matched View */}
-        {isMatchedView && matchResult && (
-          <div className="pt-2 border-t border-slate-100 space-y-2">
-            {matchResult.matched_rules.length > 0 && (
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                  Matched Criteria ({matchResult.matched_rules.length})
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {matchResult.matched_rules.map((r, i) => (
-                    <span
-                      key={i}
-                      className="text-[11px] bg-emerald-50 text-emerald-900 border border-emerald-100 px-2 py-0.5 rounded-md"
-                      title={`${r.field}: ${String(r.actual_value)}`}
-                    >
-                      {r.description || `${r.field} ${r.operator} ${String(r.expected_value)}`}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {matchResult.failed_rules.length > 0 && (
-              <div className="space-y-1 pt-1">
-                <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1">
-                  <XCircle className="h-3 w-3 text-rose-600" />
-                  Why this didn't match ({matchResult.failed_rules.length})
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {matchResult.failed_rules.map((r, i) => (
-                    <span
-                      key={i}
-                      className="text-[11px] bg-rose-50 text-rose-900 border border-rose-100 px-2 py-0.5 rounded-md"
-                      title={`Provided: ${String(r.actual_value ?? 'None')}`}
-                    >
-                      {r.description || `Requires ${r.field} ${r.operator} ${String(r.expected_value)}`}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Primary Benefit Highlight */}
-        {benefits.length > 0 && (
-          <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/80 space-y-1">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
-              <Building2 className="h-3.5 w-3.5 text-emerald-700" />
-              <span>Key Benefit:</span>
-            </div>
-            <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
-              {benefits[0]}
-            </p>
-          </div>
-        )}
-
-        {/* Required Documents Badge Count */}
-        {requiredDocs.length > 0 && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span>
-              {requiredDocs.length} required documents ({requiredDocs.slice(0, 2).join(', ')}
-              {requiredDocs.length > 2 ? '...' : ''})
+          <div className="flex items-center justify-between text-xs font-mono-code border-t border-border pt-3">
+            <span className="text-[10px] text-muted-foreground uppercase">
+              GAZETTE: {domain}
             </span>
+            {benefitAmount && (
+              <span className="font-bold text-foreground text-[11px]">
+                {benefitAmount}
+              </span>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Action Footer */}
-      <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+      {/* Card Footer Actions */}
+      <div className="p-5 pt-0 flex items-center gap-2">
         <button
+          type="button"
           onClick={() => onViewDetails(scheme)}
-          className="text-xs font-bold text-slate-700 hover:text-emerald-700 inline-flex items-center gap-1 transition cursor-pointer"
+          className="flex-1 btn-primary-sleek text-[11px] h-9"
         >
-          <span>View Details</span>
-          <ChevronRight className="h-3.5 w-3.5" />
+          View Statute Details
         </button>
 
-        {isMatchedView ? (
+        {onCheckEligibility && (
           <button
-            onClick={() => onViewDetails(scheme)}
-            className={`text-xs font-semibold px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-              isEligible
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}
-          >
-            <span>{isEligible ? 'Prepare Application' : 'Inspect Criteria'}</span>
-            <ChevronRight className="h-3 w-3" />
-          </button>
-        ) : onCheckEligibility ? (
-          <button
+            type="button"
             onClick={onCheckEligibility}
-            className="text-xs font-semibold px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition cursor-pointer flex items-center gap-1.5"
+            className="btn-outline-sleek text-[11px] h-9 px-3"
           >
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Check Eligibility</span>
+            Check
           </button>
-        ) : (
-          <a
-            href={scheme.official_source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs font-medium text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
-          >
-            <span>Official Portal</span>
-            <ExternalLink className="h-3 w-3" />
-          </a>
         )}
       </div>
     </div>

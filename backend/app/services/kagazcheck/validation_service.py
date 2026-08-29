@@ -600,5 +600,66 @@ class DocumentValidationEngine:
         else:
             return "MISMATCH", items
 
+    @classmethod
+    def cross_match_profile(
+        cls,
+        arg1: Optional[Dict[str, Any]],
+        arg2: Optional[Dict[str, Any]],
+    ) -> Tuple[str, List[ProfileMatchItem]]:
+        """
+        Polymorphic wrapper handling both (extracted_fields, citizen_profile) and (citizen_profile, extracted_fields).
+        """
+        if not arg1 and not arg2:
+            return "UNVERIFIED", []
+            
+        if isinstance(arg1, dict) and any(k in arg1 for k in ["holder_name", "aadhaar_number", "survey_number", "id_number", "bank_account_number"]):
+            extracted_fields = arg1
+            citizen_profile = arg2
+        elif isinstance(arg2, dict) and any(k in arg2 for k in ["holder_name", "aadhaar_number", "survey_number", "id_number", "bank_account_number"]):
+            extracted_fields = arg2
+            citizen_profile = arg1
+        else:
+            extracted_fields = arg1 or {}
+            citizen_profile = arg2
+            
+        return cls.cross_match_citizen_profile(extracted_fields, citizen_profile)
+
+    @classmethod
+    def validate_document(
+        cls,
+        doc_type: str,
+        fields: Dict[str, Any],
+        citizen_profile: Optional[Dict[str, Any]] = None,
+        is_readable: bool = True
+    ) -> Dict[str, Any]:
+        validations, validity_status = cls.validate_fields(doc_type, fields, is_readable)
+        
+        profile_matches = []
+        if citizen_profile:
+            _, profile_matches = cls.cross_match_profile(fields, citizen_profile)
+            
+        issues = [v.issue_reason for v in validations if not v.is_valid and v.issue_reason]
+        
+        for pm in profile_matches:
+            if not pm.matched and pm.details:
+                issues.append(pm.details)
+                
+        is_valid = validity_status in ("VALID", "WARNING") and len([v for v in validations if not v.is_valid]) == 0
+        
+        def _to_dict(obj: Any) -> Any:
+            if hasattr(obj, 'model_dump'):
+                return obj.model_dump()
+            elif hasattr(obj, 'dict'):
+                return obj.dict()
+            return obj
+
+        return {
+            "validations": [_to_dict(v) for v in validations],
+            "profile_matches": [_to_dict(pm) for pm in profile_matches],
+            "is_valid": is_valid,
+            "validity_status": validity_status,
+            "issues": issues,
+        }
+
 
 validation_engine = DocumentValidationEngine()

@@ -1,9 +1,6 @@
-import { useState } from 'react';
-import {
-  CheckCircle2,
-  UploadCloud,
-  Sparkles,
-} from 'lucide-react';
+'use client';
+
+import { useState, useEffect } from 'react';
 
 interface DocumentItem {
   id: string;
@@ -29,10 +26,22 @@ export function DocumentChecklist({
       id: `doc-${idx}`,
       name: doc,
       required: true,
-      status: idx === 0 ? 'ready' : 'missing', // 1st doc marked ready by default as demo
+      status: idx === 0 ? 'ready' : 'missing',
       fileName: idx === 0 ? 'Aadhaar_Verified.pdf' : undefined,
     }))
   );
+
+  useEffect(() => {
+    setDocList(
+      documents.map((doc, idx) => ({
+        id: `doc-${idx}`,
+        name: doc,
+        required: true,
+        status: idx === 0 ? 'ready' : 'missing',
+        fileName: idx === 0 ? 'Aadhaar_Verified.pdf' : undefined,
+      }))
+    );
+  }, [documents]);
 
   const readyCount = docList.filter((d) => d.status === 'ready').length;
   const totalCount = docList.length;
@@ -40,128 +49,79 @@ export function DocumentChecklist({
 
   const toggleDocStatus = (id: string) => {
     setDocList((prev) =>
-      prev.map((doc) => {
-        if (doc.id === id) {
-          const nextStatus = doc.status === 'ready' ? 'missing' : 'ready';
+      prev.map((d) => {
+        if (d.id === id) {
           return {
-            ...doc,
-            status: nextStatus,
-            fileName: nextStatus === 'ready' ? `${doc.name.replace(/\s+/g, '_')}.pdf` : undefined,
+            ...d,
+            status: d.status === 'ready' ? 'missing' : 'ready',
+            fileName: d.status === 'ready' ? undefined : `${d.name.replace(/\s+/g, '_')}_Document.pdf`,
           };
         }
-        return doc;
+        return d;
       })
     );
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5 text-left">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+    <div className="p-6 card-saas space-y-5 text-left animate-sleek">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold text-base text-slate-900">Document Readiness Auditor</h3>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-              KagazCheck Ready
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Audit required certificates for {schemeName}
-          </p>
+          <span className="badge-saas badge-saas-neutral">
+            STATUTORY REQUIREMENTS
+          </span>
+          <h3 className="text-base sm:text-lg font-bold text-foreground mt-1.5">
+            {schemeName} Checklist
+          </h3>
         </div>
 
-        <div className="text-right">
-          <span className="text-xs font-bold text-slate-700">
-            {readyCount} of {totalCount} Ready
+        <div className="text-right font-mono-code text-xs">
+          <span className="font-bold text-foreground">
+            {readyCount} / {totalCount} READY ({progressPercent}%)
           </span>
-          <div className="w-32 bg-slate-100 h-2 rounded-full mt-1 overflow-hidden">
-            <div
-              className="bg-emerald-600 h-full rounded-full transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
         </div>
       </div>
 
-      {/* Document Items List */}
-      <div className="space-y-2.5">
+      {/* Itemized List */}
+      <div className="space-y-2">
         {docList.map((doc) => (
           <div
             key={doc.id}
-            className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-              doc.status === 'ready'
-                ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
-                : 'bg-slate-50 border-slate-200 text-slate-800'
-            }`}
+            onClick={() => toggleDocStatus(doc.id)}
+            className="p-3.5 rounded-xl bg-muted/30 border border-border flex items-center justify-between gap-3 text-xs cursor-pointer hover:border-foreground/40 transition"
           >
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => toggleDocStatus(doc.id)}
-                className="focus:outline-none cursor-pointer"
-              >
-                {doc.status === 'ready' ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                ) : (
-                  <div className="h-5 w-5 rounded-full border-2 border-slate-300 hover:border-emerald-500 transition" />
-                )}
-              </button>
-
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold">{doc.name}</span>
-                  {doc.required && (
-                    <span className="text-[9px] font-semibold uppercase px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-700">
-                      Required
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  {doc.status === 'ready' ? (
-                    <span className="text-emerald-700 font-mono text-[10px]">
-                      ✓ {doc.fileName || 'Verified Document Attached'}
-                    </span>
-                  ) : (
-                    'Not uploaded yet'
-                  )}
-                </p>
-              </div>
+            <div>
+              <span className="font-semibold text-foreground block font-sans-sleek">{doc.name}</span>
+              {doc.fileName && (
+                <span className="font-mono-code text-[10px] text-muted-foreground">
+                  FILE: {doc.fileName}
+                </span>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => toggleDocStatus(doc.id)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
+            <span
+              className={`badge-saas ${
                 doc.status === 'ready'
-                  ? 'border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50'
-                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  ? 'badge-saas-active'
+                  : 'badge-saas-neutral'
               }`}
             >
-              <UploadCloud className="h-3.5 w-3.5 text-slate-500" />
-              <span>{doc.status === 'ready' ? 'Replace' : 'Upload'}</span>
-            </button>
+              {doc.status === 'ready' ? 'READY' : 'MISSING'}
+            </span>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-        <div className="p-2.5 rounded-xl bg-slate-50 text-[11px] text-slate-500 flex items-center gap-2 flex-1">
-          <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span>
-            Statutory AI audit powered by KagazCheck deterministic vision engine.
-          </span>
-        </div>
-
-        {onOpenKagazCheck && (
+      {onOpenKagazCheck && (
+        <div className="pt-2 border-t border-border flex justify-end">
           <button
             type="button"
             onClick={onOpenKagazCheck}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            className="btn-primary-sleek text-xs py-1.5 px-4 h-9"
           >
-            <UploadCloud className="h-3.5 w-3.5" />
-            <span>Launch KagazCheck Camera</span>
+            Launch KagazCheck Auditor
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

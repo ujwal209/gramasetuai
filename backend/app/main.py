@@ -24,6 +24,13 @@ async def lifespan(app: FastAPI):
                 db.close()
         except Exception as e:
             logger.warning(f"Database initialization warning: {e}")
+
+    # Initialize MongoDB Atlas indexes
+    try:
+        from app.database.mongodb import init_mongo_indexes
+        await init_mongo_indexes()
+    except Exception as me:
+        logger.warning(f"MongoDB index initialization warning: {me}")
     yield
     # Shutdown
 
@@ -38,11 +45,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration
+# CORS configuration - Permissive for Vercel Serverless and Web/Mobile Clients
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=["*"],
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,974 +1,663 @@
-import { useState, useEffect, useRef } from 'react';
-import {
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-  Sparkles,
-  Send,
-  Trash2,
-  ExternalLink,
-  ShieldCheck,
-  FileCheck,
-  AlertCircle,
-  CheckCircle2,
-  Radio,
-  Keyboard,
-  Info,
-  ArrowRight,
-  Headphones,
-  FileText,
-} from 'lucide-react';
+'use client';
 
+import React, { useState, useEffect, useRef } from 'react';
+import { MarkdownContent } from './MarkdownContent';
+import { useLanguage } from '@/context/LanguageContext';
+import { dashboardTranslations } from '@/lib/dashboardTranslations';
+import { LanguageType } from '@/components/LanguageDropdown';
 import {
   transcribeAudio,
   respondVani,
-  clearVaniSession,
+  saveVaniConversation,
   type CitizenProfile,
   type SchemeData,
   type SchemeMatchResult,
   type VaniSchemeCard,
   type VaniActionLink,
+  type VaniSourceCitation,
 } from '../services/api';
+import { uploadAudioToCloudinary } from '@/lib/cloudinary';
 
-
-export type VaniState = 'idle' | 'listening' | 'processing' | 'thinking' | 'speaking' | 'finished';
+export type VaniState = 'idle' | 'listening' | 'processing' | 'thinking' | 'speaking';
 
 export interface VaniBotProps {
   citizenProfile?: CitizenProfile;
-  activeLanguage?: string;
   onOpenSchemeModal?: (scheme: SchemeData | SchemeMatchResult | { scheme_id: string; scheme_name: string }) => void;
   onOpenKagazCheck?: (schemeId?: string) => void;
   onOpenParchaa?: (schemeId: string) => void;
 }
 
-
-interface ChatMessage {
+interface VaniTurn {
   id: string;
-  sender: 'citizen' | 'vani';
-  text: string;
+  query: string;
   language: string;
+  replyText: string;
   audioBase64?: string | null;
-  schemeCards?: VaniSchemeCard[];
-  actionLinks?: VaniActionLink[];
-  sources?: string[];
-  suggestedFollowups?: string[];
+  audioUrl?: string | null;
+  schemeCards: VaniSchemeCard[];
+  actionLinks: VaniActionLink[];
+  sourceCitations: VaniSourceCitation[];
   timestamp: string;
-  isAudio?: boolean;
 }
+
+const REGIONAL_LANGUAGES: Array<{ code: LanguageType; name: string; label: string }> = [
+  { code: 'kn', name: 'ಕನ್ನಡ', label: 'Kannada' },
+  { code: 'hi', name: 'हिन्दी', label: 'Hindi' },
+  { code: 'en', name: 'English', label: 'English' },
+  { code: 'te', name: 'తెలుగు', label: 'Telugu' },
+  { code: 'ta', name: 'தமிழ்', label: 'Tamil' },
+  { code: 'mr', name: 'मराठी', label: 'Marathi' },
+];
+
+const SUGGESTED_QUERIES: Record<LanguageType, string[]> = {
+  kn: [
+    'ಪಿಎಂ ಕಿಸಾನ್ ₹6,000 ಹಣ ಪಡೆಯುವುದು ಹೇಗೆ?',
+    'ಕುಸುಮ್ ಸೋಲಾರ್ ಪಂಪ್ ಸಬ್ಸಿಡಿ ಮಾಹಿತಿ ತಿಳಿಸಿ',
+    'ರೈತ ಸಿರಿ ಯೋಜನೆಯ ಅರ್ಹತೆಗಳು ಮತ್ತು ದಾಖಲೆಗಳು',
+    'ಕಿಸಾನ್ ಕ್ರೆಡಿಟ್ ಕಾರ್ಡ್ (KCC) ಲೋನ್ ಪ್ರಕ್ರಿಯೆ',
+  ],
+  hi: [
+    'पीएम किसान ₹6,000 की किस्त कैसे प्राप्त करें?',
+    'पीएम कुसुम सोलर पंप 60% सब्सिडी योजना',
+    'किसान क्रेडिट कार्ड (KCC) लोन कैसे लें?',
+    'पीएम आवास योजना ग्रामीण की पात्रता क्या है?',
+  ],
+  en: [
+    'How do I apply for PM-KISAN ₹6,000 annual DBT?',
+    'PM KUSUM Solar Pump subsidy eligibility & process',
+    'Kisan Credit Card (KCC) collateral-free crop loan',
+    'PMAY-G Rural Housing financial subsidy guidelines',
+  ],
+  te: [
+    'పీఎం కిసాన్ ₹6,000 సహాయం ఎలా పొందాలి?',
+    'పీఎం కుసుమ్ సోలార్ పంప్ సబ్సిడీ వివరాలు',
+    'రైతు భరోసా పథకం అర్హతలు ఏమిటి?',
+    'కిసాన్ క్రెడిట్ కార్డు దరఖాస్తు విధానం',
+  ],
+  ta: [
+    'பிஎம் கிசான் ₹6,000 உதவித்தொகை பெறுவது எப்படி?',
+    'குசும் சோலார் பம்ப் மானியம் தகுதி விவரங்கள்',
+    'உழவர் கடன் அட்டை (KCC) விண்ணப்பிப்பது எப்படி?',
+    'கலைஞர் மகளிர் உரிமைத் திட்டம் தகுதி என்ன?',
+  ],
+  mr: [
+    'पीएम किसान ₹6,000 हप्ता कसा मिळवावा?',
+    'पीएम कुसुम सौर कृषी पंप योजना अनुदान',
+    'किसान क्रेडिट कार्ड (KCC) अर्ज प्रक्रिया',
+    'नमो शेतकरी महासन्मान निधी योजना माहिती',
+  ],
+};
+
+const VANI_STORAGE_SESSION_KEY = 'gramsetu_vani_latest_turn';
 
 export function VaniBot({
   citizenProfile,
-  activeLanguage = 'kn',
   onOpenSchemeModal,
   onOpenKagazCheck,
   onOpenParchaa,
 }: VaniBotProps) {
+  const { language, setLanguage } = useLanguage();
+  const t = dashboardTranslations[language]?.vani || dashboardTranslations.en.vani;
 
-  // Session & Language State
-  const [sessionId] = useState<string>(() => `vani_session_${Date.now().toString(36)}`);
-  const [language, setLanguage] = useState<string>(activeLanguage);
-  
-  // Voice & Processing State
+  const [sessionId] = useState<string>(() => `vani_session_${Date.now()}`);
+  const [textInput, setTextInput] = useState('');
   const [vaniState, setVaniState] = useState<VaniState>('idle');
+  const [activeQueryInProgress, setActiveQueryInProgress] = useState<string>('');
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
-  const [keyboardMode, setKeyboardMode] = useState<boolean>(false);
-  const [textInput, setTextInput] = useState<string>('');
-  const [audioLevel, setAudioLevel] = useState<number>(0);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [currentlyPlayingAudio, setCurrentlyPlayingAudio] = useState<string | null>(null);
+  const [savedArchiveId, setSavedArchiveId] = useState<string | null>(null);
 
-  // Media Recording & Audio Web API Refs
+  const [activeTurn, setActiveTurn] = useState<VaniTurn | null>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-  const activeAudioElementRef = useRef<HTMLAudioElement | null>(null);
-  const chatBottomRef = useRef<HTMLDivElement | null>(null);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Available Languages
-  const languages = [
-    { code: 'kn', label: 'ಕನ್ನಡ (Kannada)', native: 'ಕನ್ನಡ', flag: '🇮🇳' },
-    { code: 'hi', label: 'हिन्दी (Hindi)', native: 'हिन्दी', flag: '🇮🇳' },
-    { code: 'en', label: 'English (Indian)', native: 'English', flag: '🌐' },
-  ];
-
-  // Conversation History
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const welcomeMessages: Record<string, string> = {
-      kn: 'ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ ಗ್ರಾಮಸೇತು ಧ್ವನಿ ಸಹಾಯಕ (Vani-Bot). ನಿಮಗೆ ಯಾವ ಯೋಜನೆಯ ಮಾಹಿತಿ ಅಥವಾ ದಾಖಲೆಗಳ ಸಹಾಯ ಬೇಕು? ಮೈಕ್ರೊಫೋನ್ ಬಟನ್ ಒತ್ತಿ ಮಾತನಾಡಿ.',
-      hi: 'नमस्ते! मैं आपका ग्रामसेतु वाणी-बॉट (Vani-Bot) हूँ। सरकारी योजनाओं की पात्रता और जरूरी दस्तावेजों के बारे में पूछने के लिए माइक दबाकर बोलें।',
-      en: 'Namaste! I am Vani-Bot, your GramSetu Civic Voice Assistant. Tap the microphone and ask me anything about government schemes, eligibility, or documents.',
-    };
-
-    return [
-      {
-        id: 'welcome',
-        sender: 'vani',
-        text: welcomeMessages[activeLanguage] || welcomeMessages['kn'],
-        language: activeLanguage,
-        timestamp: 'Just now',
-        sources: ['GramSetu Statutory Rules Engine', 'Ministry of Agriculture', 'PMAY-G Portal'],
-        suggestedFollowups: activeLanguage === 'kn'
-          ? [
-              'ಪಿಎಂ ಕಿಸಾನ್ ಯೋಜನೆಗೆ ಯಾವ ದಾಖಲೆಗಳು ಬೇಕು?',
-              'ನನಗೆ ಯಾವ ಯೋಜನೆ ಸಿಗುತ್ತದೆ?',
-              'ಪಿಎಂ ಆವಾಸ್ ಗ್ರಾಮೀಣ ಸಹಾಯಧನ ಎಷ್ಟು?',
-            ]
-          : activeLanguage === 'hi'
-          ? [
-              'पीएम किसान के लिए कौन से दस्तावेज चाहिए?',
-              'क्या मैं पीएम आवास योजना के लिए पात्र हूँ?',
-              'आयुष्मान भारत 5 लाख का लाभ कैसे लें?',
-            ]
-          : [
-              'What documents do I need for PM-KISAN?',
-              'Am I eligible for PMAY-G housing?',
-              'How do I apply for Raitha Vidya Nidhi?',
-            ],
-      },
-    ];
-  });
-
-  // Auto-scroll chat to bottom
+  // Restore latest conversation on browser refresh so state does not vanish
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, vaniState]);
+    try {
+      const saved = localStorage.getItem(VANI_STORAGE_SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as VaniTurn;
+        if (parsed && parsed.query) {
+          setActiveTurn(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore previous Vani session:', e);
+    }
+  }, []);
 
-  // Clean up recording and audio on unmount
+  // Recording Timer
+  useEffect(() => {
+    if (vaniState === 'listening') {
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    };
+  }, [vaniState]);
+
+  // Stop audio on unmount
   useEffect(() => {
     return () => {
-      stopRecordingCleanup();
-      stopAudioPlayback();
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+      }
     };
   }, []);
 
-  const stopAudioPlayback = () => {
-    if (activeAudioElementRef.current) {
-      activeAudioElementRef.current.pause();
-      activeAudioElementRef.current.currentTime = 0;
-      activeAudioElementRef.current = null;
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setCurrentlyPlayingAudio(null);
-    if (vaniState === 'speaking') {
-      setVaniState('finished');
-    }
-  };
+  const togglePlayAudio = (audioB64?: string | null, audioUrl?: string | null) => {
+    if (!audioB64 && !audioUrl) return;
 
-  const stopRecordingCleanup = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (e) {
-        console.warn('Error stopping media recorder', e);
-      }
-    }
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      try {
-        audioContextRef.current.close();
-      } catch (e) {
-        // ignore
-      }
-      audioContextRef.current = null;
-    }
-    setAudioLevel(0);
-  };
-
-  // Play assistant voice audio
-  const playAudioResponse = (audioBase64?: string | null, text?: string, langCode: string = language) => {
-    if (isMuted) return;
-    stopAudioPlayback();
-
-    if (audioBase64) {
-      try {
-        const audioSrc = `data:audio/mp3;base64,${audioBase64}`;
-        const audio = new Audio(audioSrc);
-        activeAudioElementRef.current = audio;
-        setCurrentlyPlayingAudio(audioBase64);
-        setVaniState('speaking');
-
-        audio.onended = () => {
-          setCurrentlyPlayingAudio(null);
-          setVaniState('finished');
-          activeAudioElementRef.current = null;
-        };
-
-        audio.onerror = () => {
-          console.warn('Audio playback failed, falling back to Web Speech API');
-          fallbackWebSpeech(text, langCode);
-        };
-
-        audio.play().catch((err) => {
-          console.warn('Autoplay prevented by browser:', err);
-          setCurrentlyPlayingAudio(null);
-          setVaniState('finished');
-        });
-      } catch (err) {
-        fallbackWebSpeech(text, langCode);
-      }
-    } else if (text) {
-      fallbackWebSpeech(text, langCode);
-    }
-  };
-
-  const fallbackWebSpeech = (text?: string, langCode: string = 'kn') => {
-    if (!text || !('speechSynthesis' in window) || isMuted) {
-      setVaniState('finished');
+    if (activeAudioRef.current && isPlayingAudio) {
+      activeAudioRef.current.pause();
+      setIsPlayingAudio(false);
       return;
     }
-    try {
-      const cleanText = text.replace(/[*#`]/g, '').trim();
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = langCode === 'kn' ? 'kn-IN' : langCode === 'hi' ? 'hi-IN' : 'en-IN';
-      utterance.rate = 0.95;
-      
-      utterance.onstart = () => {
-        setVaniState('speaking');
-        setCurrentlyPlayingAudio('browser_speech');
-      };
-
-      utterance.onend = () => {
-        setCurrentlyPlayingAudio(null);
-        setVaniState('finished');
-      };
-
-      utterance.onerror = () => {
-        setCurrentlyPlayingAudio(null);
-        setVaniState('finished');
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      setVaniState('finished');
-    }
-  };
-
-  // Start Voice Microphone Recording
-  const startRecording = async () => {
-    stopAudioPlayback();
-    setErrorNotice(null);
-    audioChunksRef.current = [];
 
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Microphone access is not supported on this browser.');
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+      const src = audioUrl || `data:audio/wav;base64,${audioB64}`;
+      const audio = new Audio(src);
+      activeAudioRef.current = audio;
+      setIsPlayingAudio(true);
+
+      audio.onended = () => {
+        setIsPlayingAudio(false);
+        activeAudioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        setIsPlayingAudio(false);
+        activeAudioRef.current = null;
+      };
+
+      audio.play().catch(() => {
+        setIsPlayingAudio(false);
       });
-
-      // Set up real-time audio visualizer analyser
-      try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        audioContextRef.current = audioCtx;
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 64;
-        source.connect(analyser);
-        analyserRef.current = analyser;
-
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        const updateVisualizer = () => {
-          if (!analyserRef.current) return;
-          analyserRef.current.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < bufferLength; i++) {
-            sum += dataArray[i];
-          }
-          const avg = sum / bufferLength;
-          setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
-          animFrameRef.current = requestAnimationFrame(updateVisualizer);
-        };
-        updateVisualizer();
-      } catch (e) {
-        console.warn('AudioContext visualization setup note:', e);
-      }
-
-      // Check supported MIME type
-      let mimeType = 'audio/webm';
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        mimeType = 'audio/webm;codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        mimeType = 'audio/mp4';
-      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-        mimeType = 'audio/ogg';
-      }
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        await handleAudioCaptured(audioBlob);
-      };
-
-      mediaRecorder.start(250); // Capture chunks every 250ms
-      setVaniState('listening');
-    } catch (err: any) {
-      console.error('Microphone capture error:', err);
-      let msg = 'Could not access microphone. Please grant permission or use keyboard mode.';
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        msg = 'Microphone permission denied. Please allow microphone access in your browser settings.';
-      }
-      setErrorNotice(msg);
-      setVaniState('idle');
+    } catch {
+      setIsPlayingAudio(false);
     }
   };
 
-  // Stop Recording and Process Audio
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      setVaniState('processing');
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
-      mediaRecorderRef.current.stop();
-    }
-  };
+  const handleSubmitQuery = async (queryText: string) => {
+    const cleanQuery = queryText.trim();
+    if (!cleanQuery) return;
 
-  // Handle Captured Audio Blob
-  const handleAudioCaptured = async (audioBlob: Blob) => {
-    setVaniState('processing');
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      setIsPlayingAudio(false);
+    }
+
     setErrorNotice(null);
-
-    try {
-      // Step 1: Transcribe via STT
-      const transResult = await transcribeAudio(audioBlob, language);
-      const userTranscript = transResult.transcript?.trim();
-
-      if (!userTranscript) {
-        setErrorNotice(
-          language === 'kn'
-            ? 'ಧ್ವನಿ ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೊಮ್ಮೆ ಮಾತನಾಡಿ.'
-            : language === 'hi'
-            ? 'आवाज स्पष्ट नहीं सुनाई दी। कृपया पुनः बोलें।'
-            : 'Could not capture clear speech. Please try speaking again.'
-        );
-        setVaniState('idle');
-        return;
-      }
-
-      // Add citizen voice message to chat
-      const citizenMsg: ChatMessage = {
-        id: `user_${Date.now()}`,
-        sender: 'citizen',
-        text: userTranscript,
-        language: transResult.detected_language || language,
-        timestamp: 'Just now',
-        isAudio: true,
-      };
-      setMessages((prev) => [...prev, citizenMsg]);
-
-      // Step 2: Send query to Civic Conversation Engine
-      setVaniState('thinking');
-      await executeCivicResponse(userTranscript, transResult.detected_language || language);
-    } catch (err: any) {
-      console.error('Audio processing turn error:', err);
-      setErrorNotice('Error processing voice query. Please try again.');
-      setVaniState('idle');
-    }
-  };
-
-  // Execute Text Query Turn (used by typing, suggested prompts, and voice transcription)
-  const executeCivicResponse = async (queryText: string, langToUse: string = language) => {
+    setSavedArchiveId(null);
+    setTextInput('');
+    setActiveQueryInProgress(cleanQuery);
     setVaniState('thinking');
-    setErrorNotice(null);
 
     try {
       const response = await respondVani({
-        query: queryText,
-        language: langToUse,
+        query: cleanQuery,
+        language: language,
         session_id: sessionId,
         citizen_profile: citizenProfile,
         include_audio: true,
       });
 
-      const vaniMsg: ChatMessage = {
-        id: `vani_${Date.now()}`,
-        sender: 'vani',
-        text: response.reply_text,
-        language: response.language,
+      let cloudAudioUrl: string | undefined = undefined;
+
+      // Upload MP3 to Cloudinary & Persist to MongoDB
+      if (response.reply_audio_base64) {
+        try {
+          const uploadRes = await uploadAudioToCloudinary(response.reply_audio_base64);
+          cloudAudioUrl = uploadRes.secure_url;
+        } catch (uploadErr) {
+          console.warn('Cloudinary upload notice:', uploadErr);
+        }
+      }
+
+      try {
+        const savedRec = await saveVaniConversation({
+          session_id: sessionId,
+          language: response.language || language,
+          query_text: cleanQuery,
+          response_text: response.reply_text,
+          ai_summary: response.ai_summary || response.reply_text,
+          audio_url: cloudAudioUrl,
+          schemes_matched: response.scheme_cards || [],
+          detected_intent: response.intent || 'agri_scheme_inquiry',
+          duration_seconds: 14,
+        });
+        setSavedArchiveId(savedRec.id);
+      } catch (dbErr) {
+        console.warn('Database save notice:', dbErr);
+      }
+
+      const newTurn: VaniTurn = {
+        id: `turn_${Date.now()}`,
+        query: cleanQuery,
+        language: response.language || language,
+        replyText: response.reply_text,
         audioBase64: response.reply_audio_base64,
-        schemeCards: response.scheme_cards,
-        actionLinks: response.action_links,
-        sources: response.sources,
-        suggestedFollowups: response.suggested_followups,
-        timestamp: 'Just now',
+        audioUrl: cloudAudioUrl,
+        schemeCards: response.scheme_cards || [],
+        actionLinks: response.action_links || [],
+        sourceCitations: response.source_citations || [],
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
-      setMessages((prev) => [...prev, vaniMsg]);
+      setActiveTurn(newTurn);
+      setVaniState('idle');
+      setActiveQueryInProgress('');
 
-      // Auto-play audio response
-      if (response.reply_audio_base64) {
-        playAudioResponse(response.reply_audio_base64, response.reply_text, response.language);
-      } else {
-        playAudioResponse(null, response.reply_text, response.language);
+      // Persist latest turn in localStorage so on refresh it never vanishes
+      try {
+        localStorage.setItem(VANI_STORAGE_SESSION_KEY, JSON.stringify(newTurn));
+      } catch (e) {
+        console.warn('Could not cache session locally:', e);
       }
-    } catch (err: any) {
-      console.error('Failed to get Vani-Bot civic response:', err);
-      setErrorNotice('Connection error while contacting GramSetu civic engine.');
+
+      if (response.reply_audio_base64) {
+        togglePlayAudio(response.reply_audio_base64, cloudAudioUrl);
+      }
+    } catch (err: unknown) {
+      let msg = 'Failed to retrieve statutory records from official government gazettes.';
+      if (err instanceof Error) msg = err.message;
+      setErrorNotice(msg);
+      setVaniState('idle');
+      setActiveQueryInProgress('');
+    }
+  };
+
+  const handleStartRecording = async () => {
+    setErrorNotice(null);
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      setIsPlayingAudio(false);
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach((track) => track.stop());
+
+        if (audioBlob.size < 500) {
+          setVaniState('idle');
+          return;
+        }
+
+        setVaniState('processing');
+        setActiveQueryInProgress(t.transcribing);
+        try {
+          const sttRes = await transcribeAudio(audioBlob, language);
+          if (sttRes && sttRes.transcript && sttRes.transcript.trim()) {
+            await handleSubmitQuery(sttRes.transcript);
+          } else {
+            setErrorNotice('Could not recognize speech clearly. Please speak closer to the microphone.');
+            setVaniState('idle');
+            setActiveQueryInProgress('');
+          }
+        } catch (sttErr: unknown) {
+          let msg = 'Voice recognition service unavailable.';
+          if (sttErr instanceof Error) msg = sttErr.message;
+          setErrorNotice(msg);
+          setVaniState('idle');
+          setActiveQueryInProgress('');
+        }
+      };
+
+      mediaRecorder.start();
+      setVaniState('listening');
+    } catch {
+      setErrorNotice('Microphone access denied. Please allow microphone permissions in your browser.');
       setVaniState('idle');
     }
   };
 
-  // Submit Typed Text Query
-  const handleSendText = async () => {
-    if (!textInput.trim() || vaniState === 'listening' || vaniState === 'processing') return;
-    const query = textInput.trim();
-    setTextInput('');
-
-    const citizenMsg: ChatMessage = {
-      id: `user_${Date.now()}`,
-      sender: 'citizen',
-      text: query,
-      language: language,
-      timestamp: 'Just now',
-      isAudio: false,
-    };
-    setMessages((prev) => [...prev, citizenMsg]);
-
-    await executeCivicResponse(query, language);
-  };
-
-  // Handle Suggested Prompt Click
-  const handleSelectPrompt = async (promptText: string) => {
-    if (vaniState === 'listening' || vaniState === 'processing') return;
-
-    const citizenMsg: ChatMessage = {
-      id: `user_${Date.now()}`,
-      sender: 'citizen',
-      text: promptText,
-      language: language,
-      timestamp: 'Just now',
-      isAudio: false,
-    };
-    setMessages((prev) => [...prev, citizenMsg]);
-
-    await executeCivicResponse(promptText, language);
-  };
-
-  // Reset Session History
-  const handleClearChat = async () => {
-    stopAudioPlayback();
-    try {
-      await clearVaniSession(sessionId);
-    } catch (e) {
-      // ignore
-    }
-    setMessages([
-      {
-        id: `welcome_${Date.now()}`,
-        sender: 'vani',
-        text:
-          language === 'kn'
-            ? 'ಸಂಭಾಷಣೆಯನ್ನು ತೆರವುಗೊಳಿಸಲಾಗಿದೆ. ನೀವು ಹೊಸ ಪ್ರಶ್ನೆಯನ್ನು ಕೇಳಬಹುದು.'
-            : language === 'hi'
-            ? 'बातचीत रीसेट हो गई है। आप नया प्रश्न पूछ सकते हैं।'
-            : 'Conversation cleared. You can ask a new question.',
-        language: language,
-        timestamp: 'Just now',
-        suggestedFollowups: [
-          'What documents do I need for PM-KISAN?',
-          'Am I eligible for PMAY-G housing?',
-          'What health benefits does PM-JAY offer?',
-        ],
-      },
-    ]);
-    setVaniState('idle');
-  };
-
-  // Helper labels for visual states
-  const getStatusBadge = () => {
-    switch (vaniState) {
-      case 'listening':
-        return (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-100 text-rose-900 text-xs font-bold animate-pulse border border-rose-200">
-            <Radio className="h-3.5 w-3.5 text-rose-600 animate-spin" />
-            <span>Listening to Citizen... (ನಾನು ಕೇಳಿಸಿಕೊಳ್ಳುತ್ತಿದ್ದೇನೆ)</span>
-          </span>
-        );
-      case 'processing':
-        return (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold border border-amber-200">
-            <Sparkles className="h-3.5 w-3.5 text-amber-600 animate-spin" />
-            <span>Processing Audio / STT (ಧ್ವನಿಯನ್ನು ಪರಿವರ್ತಿಸಲಾಗುತ್ತಿದೆ)</span>
-          </span>
-        );
-      case 'thinking':
-        return (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-bold border border-blue-200">
-            <Sparkles className="h-3.5 w-3.5 text-blue-600 animate-spin" />
-            <span>Evaluating Scheme Rules (ಅರ್ಹತೆ ಪರಿಶೀಲನೆ)</span>
-          </span>
-        );
-      case 'speaking':
-        return (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-bold border border-emerald-200">
-            <Volume2 className="h-3.5 w-3.5 text-emerald-600 animate-bounce" />
-            <span>Speaking Response (ಉತ್ತರ ಹೇಳಲಾಗುತ್ತಿದೆ)</span>
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Ready / ಮೈಕ್ ಒತ್ತಿ ಮಾತನಾಡಿ</span>
-          </span>
-        );
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
   };
+
+  const currentSuggestions = SUGGESTED_QUERIES[language] || SUGGESTED_QUERIES.en;
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6">
-      {/* Top Header Card */}
-      <div className="bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-900 text-white rounded-3xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
-        {/* Subtle Background Pattern */}
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-72 h-72 rounded-full bg-white/5 blur-2xl pointer-events-none" />
+    <div className="max-w-5xl mx-auto space-y-6 text-left animate-sleek">
+      {/* 1. CIVIC VOICE CONTROL STATION (Pure White, Synced Language Selector) */}
+      <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs space-y-5">
+        {/* Dialect Selector Strip */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest shrink-0 mr-2 font-mono">
+              {t.dialect}
+            </span>
+            {REGIONAL_LANGUAGES.map((lang) => {
+              const isSelected = language === lang.code;
+              return (
+                <button
+                  key={lang.code}
+                  type="button"
+                  onClick={() => setLanguage(lang.code)}
+                  className={`px-3 py-1 text-xs font-semibold rounded-xl transition whitespace-nowrap cursor-pointer ${
+                    isSelected
+                      ? 'bg-slate-900 text-white font-bold shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{lang.name}</span>
+                  <span className="text-[9px] opacity-70 ml-1 font-mono">[{lang.code.toUpperCase()}]</span>
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-600/60 backdrop-blur-xs text-emerald-100 text-xs font-semibold border border-emerald-400/30">
-              <Headphones className="h-3.5 w-3.5" />
-              <span>Vani-Bot • Multilingual Conversational Voice Engine</span>
+          <div className="shrink-0 self-end sm:self-auto">
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold font-mono">
+              {vaniState === 'listening' && 'RECORDING ACTIVE'}
+              {vaniState === 'processing' && 'TRANSCRIBING'}
+              {vaniState === 'thinking' && 'GAZETTE AI'}
+              {vaniState === 'speaking' && 'VOICE PLAYBACK'}
+              {vaniState === 'idle' && t.readyStatus}
+            </span>
+          </div>
+        </div>
+
+        {/* MODERN TACTILE VOICE ORB */}
+        <div className="flex flex-col items-center justify-center py-4 space-y-4">
+          <button
+            type="button"
+            onClick={vaniState === 'listening' ? handleStopRecording : handleStartRecording}
+            className={`relative flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full transition-all duration-300 shadow-md cursor-pointer ${
+              vaniState === 'listening'
+                ? 'bg-rose-600 text-white scale-105 shadow-rose-200'
+                : vaniState === 'processing' || vaniState === 'thinking'
+                ? 'bg-amber-500 text-white animate-pulse'
+                : 'bg-emerald-700 hover:bg-emerald-800 text-white hover:scale-105 shadow-emerald-100'
+            }`}
+            title="Click to Record Spoken Voice Query"
+          >
+            {/* Live Ripple Rings during recording */}
+            {vaniState === 'listening' && (
+              <span className="absolute inset-0 rounded-full bg-rose-500 animate-ping opacity-30 pointer-events-none" />
+            )}
+
+            {/* Microphone Vector SVG */}
+            {vaniState === 'listening' ? (
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+            ) : vaniState === 'processing' || vaniState === 'thinking' ? (
+              <div className="w-7 h-7 border-3 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-8 h-8 sm:w-9 sm:h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            )}
+          </button>
+
+          {/* Status Label */}
+          <div className="text-center space-y-1">
+            <p className="text-xs font-bold text-slate-800">
+              {vaniState === 'listening'
+                ? `${t.listening} (${recordingSeconds}s)`
+                : vaniState === 'processing'
+                ? t.transcribing
+                : vaniState === 'thinking'
+                ? t.synthesizing
+                : t.tapToSpeak}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              {vaniState === 'idle' && `${REGIONAL_LANGUAGES.find((l) => l.code === language)?.label} STT & TTS`}
+            </p>
+          </div>
+        </div>
+
+        {/* Text Input Bar */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmitQuery(textInput);
+          }}
+          className="space-y-3 pt-2 border-t border-slate-100"
+        >
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder={t.typePlaceholder}
+              disabled={vaniState === 'listening' || vaniState === 'processing' || vaniState === 'thinking'}
+              className="flex-1 h-10 px-4 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:bg-white focus:border-emerald-500 transition"
+            />
+            <button
+              type="submit"
+              disabled={!textInput.trim() || vaniState !== 'idle'}
+              className="h-10 px-5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition disabled:opacity-40 cursor-pointer shrink-0"
+            >
+              {t.askBtn}
+            </button>
+          </div>
+
+          {/* Preset Prompts */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest shrink-0 mr-1 font-mono">
+              {t.suggestedLabel}
+            </span>
+            {currentSuggestions.map((q, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSubmitQuery(q)}
+                className="px-3 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] text-slate-700 whitespace-nowrap transition cursor-pointer"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </form>
+      </div>
+
+      {/* 2. ERROR NOTICE */}
+      {errorNotice && (
+        <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs font-semibold">
+          {errorNotice}
+        </div>
+      )}
+
+      {/* 3. ACTIVE CONSULTATION TURN VIEW */}
+      {activeTurn && (
+        <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs space-y-6 animate-sleek">
+          {/* Header of the Turn */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold font-mono">
+                {activeTurn.language.toUpperCase()} RESPONSE
+              </span>
+              <span className="text-xs text-slate-400 font-mono">
+                {activeTurn.timestamp}
+              </span>
+              {savedArchiveId && (
+                <span className="text-[10px] text-emerald-700 font-bold">
+                  ✓ {t.savedToDb}
+                </span>
+              )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              ಗ್ರಾಮಸೇತು ಧ್ವನಿ ಸಹಾಯಕ (Vani-Bot)
-            </h1>
-            <p className="text-emerald-100/90 text-xs sm:text-sm max-w-xl">
-              Speak naturally in Kannada, Hindi, or English. Get instant grounded answers for government scheme rules, required certificates, and application steps.
+
+            {/* Audio Playback Controls */}
+            {(activeTurn.audioBase64 || activeTurn.audioUrl) && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => togglePlayAudio(activeTurn.audioBase64, activeTurn.audioUrl)}
+                  className="px-3 py-1 text-xs font-bold rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  {isPlayingAudio ? (
+                    <>
+                      <div className="w-2.5 h-2.5 bg-rose-600 rounded-xs animate-pulse" />
+                      <span>{t.pauseVoice}</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5 text-emerald-700" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                      <span>{t.replayVoice}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Spoken Citizen Question */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+              {t.citizenSpokenQuery}
+            </span>
+            <p className="text-slate-900 font-semibold italic text-sm">
+              "{activeTurn.query}"
             </p>
           </div>
 
-          {/* Language Selector & Mute Toggle */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-emerald-950/60 p-1.5 rounded-2xl border border-emerald-600/40 flex items-center gap-1">
-              {languages.map((l) => (
-                <button
-                  key={l.code}
-                  onClick={() => setLanguage(l.code)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    language === l.code
-                      ? 'bg-white text-emerald-900 shadow-xs'
-                      : 'text-emerald-100 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <span className="mr-1">{l.flag}</span>
-                  <span>{l.native}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Audio Mute Toggle */}
-            <button
-              onClick={() => {
-                if (!isMuted) stopAudioPlayback();
-                setIsMuted(!isMuted);
-              }}
-              title={isMuted ? 'Unmute voice playback' : 'Mute voice playback'}
-              className={`p-2.5 rounded-2xl border transition cursor-pointer ${
-                isMuted
-                  ? 'bg-rose-500/20 border-rose-400/40 text-rose-200'
-                  : 'bg-emerald-950/60 border-emerald-600/40 text-emerald-100 hover:bg-emerald-900/80'
-              }`}
-            >
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
-
-            {/* Clear History */}
-            <button
-              onClick={handleClearChat}
-              title="Clear conversation session"
-              className="p-2.5 rounded-2xl bg-emerald-950/60 border border-emerald-600/40 text-emerald-100 hover:bg-emerald-900/80 hover:text-white transition cursor-pointer"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Interactive Voice Deck */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Big Microphone Command Center */}
-        <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6 text-center">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Voice Interface
+          {/* Gazette Grounded AI Answer */}
+          <div className="space-y-2">
+            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block font-mono">
+              {t.gazetteGuidance}
             </span>
-            {getStatusBadge()}
+            <div className="text-xs sm:text-sm text-slate-800 leading-relaxed prose prose-sm max-w-none">
+              <MarkdownContent content={activeTurn.replyText} />
+            </div>
           </div>
 
-          {/* Big Circular Microphone Interaction Button */}
-          <div className="py-6 flex flex-col items-center justify-center relative">
-            {/* Live Audio Activity Pulsating Rings */}
-            {vaniState === 'listening' && (
-              <div
-                className="absolute rounded-full bg-rose-500/20 animate-ping pointer-events-none transition-all duration-75"
-                style={{
-                  width: `${140 + audioLevel * 1.2}px`,
-                  height: `${140 + audioLevel * 1.2}px`,
-                }}
-              />
-            )}
-
-            {vaniState === 'speaking' && (
-              <div className="absolute rounded-full bg-emerald-500/20 animate-pulse w-48 h-48 pointer-events-none" />
-            )}
-
-            <button
-              onClick={() => {
-                if (vaniState === 'listening') {
-                  stopRecording();
-                } else if (vaniState === 'speaking') {
-                  stopAudioPlayback();
-                } else {
-                  startRecording();
-                }
-              }}
-              className={`relative z-10 w-32 h-32 rounded-full flex flex-col items-center justify-center text-white transition-all shadow-xl cursor-pointer ${
-                vaniState === 'listening'
-                  ? 'bg-rose-600 hover:bg-rose-700 ring-8 ring-rose-200 scale-105 animate-pulse'
-                  : vaniState === 'processing' || vaniState === 'thinking'
-                  ? 'bg-amber-500 ring-8 ring-amber-100 opacity-90'
-                  : vaniState === 'speaking'
-                  ? 'bg-emerald-600 ring-8 ring-emerald-100 hover:bg-emerald-700'
-                  : 'bg-gradient-to-tr from-emerald-700 to-emerald-500 hover:scale-105 ring-8 ring-emerald-50'
-              }`}
-            >
-              {vaniState === 'listening' ? (
-                <>
-                  <MicOff className="h-10 w-10 text-white" />
-                  <span className="text-[11px] font-extrabold mt-1">STOP</span>
-                </>
-              ) : vaniState === 'speaking' ? (
-                <>
-                  <VolumeX className="h-10 w-10 text-white" />
-                  <span className="text-[11px] font-extrabold mt-1">STOP VOICE</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="h-10 w-10 text-white" />
-                  <span className="text-[11px] font-extrabold mt-1">TAP TO SPEAK</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Live Waveform Activity Meter */}
-          {vaniState === 'listening' ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-center gap-1 h-8">
-                {[...Array(12)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-1.5 bg-rose-500 rounded-full transition-all duration-75"
-                    style={{
-                      height: `${Math.max(6, Math.sin((i + audioLevel) * 0.5) * audioLevel * 0.4 + 10)}px`,
-                    }}
-                  />
-                ))}
-              </div>
-              <p className="text-xs font-semibold text-rose-700">
-                Listening... Tap STOP when done speaking
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <h3 className="font-bold text-sm text-slate-800">
-                {language === 'kn'
-                  ? 'ಮಾತನಾಡಲು ಬಟನ್ ಒತ್ತಿರಿ'
-                  : language === 'hi'
-                  ? 'बोलने के लिए बटन दबाएं'
-                  : 'Tap the Button to Speak'}
-              </h3>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                {language === 'kn'
-                  ? 'ನಿಮ್ಮ ಸ್ವಂತ ಭಾಷೆಯಲ್ಲಿ ಯೋಜನೆ, ಅರ್ಹತೆ ಅಥವಾ ದಾಖಲೆಗಳ ಬಗ್ಗೆ ಕೇಳಿ.'
-                  : language === 'hi'
-                  ? 'अपनी भाषा में सरकारी योजनाओं और आवश्यक दस्तावेजों के बारे में पूछें।'
-                  : 'Ask about any central or state welfare scheme in your regional dialect.'}
-              </p>
-            </div>
-          )}
-
-          {/* Error Alert Display */}
-          {errorNotice && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 text-left">
-              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold">{errorNotice}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Mode Switcher: Voice vs Type */}
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <button
-              onClick={() => setKeyboardMode(!keyboardMode)}
-              className="text-xs font-medium text-slate-600 hover:text-emerald-700 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Keyboard className="h-3.5 w-3.5" />
-              <span>{keyboardMode ? 'Hide Type Input' : 'Type inquiry instead'}</span>
-            </button>
-
-            <span className="text-[11px] text-slate-400">
-              Privacy First • Zero Storage
-            </span>
-          </div>
-
-          {/* Keyboard Input Box (If enabled) */}
-          {keyboardMode && (
-            <div className="flex items-center gap-2 pt-2 animate-in fade-in duration-150">
-              <input
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendText()}
-                placeholder={
-                  language === 'kn'
-                    ? 'ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ...'
-                    : language === 'hi'
-                    ? 'यहाँ लिखें...'
-                    : 'Type scheme question here...'
-                }
-                className="flex-1 text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
-              />
-              <button
-                onClick={handleSendText}
-                disabled={!textInput.trim() || vaniState === 'listening'}
-                className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 transition cursor-pointer"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Multi-Turn Conversation Flow & Grounded Scheme Cards */}
-        <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 shadow-xs flex flex-col h-[640px] overflow-hidden">
-          {/* Conversation Header */}
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-bold text-xs text-slate-800">
-                Conversational Dialogue Feed
+          {/* VERIFIED SOURCE CITATIONS WITH REAL FAVICONS */}
+          {activeTurn.sourceCitations && activeTurn.sourceCitations.length > 0 && (
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-mono">
+                {t.verifiedSources}
               </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {activeTurn.sourceCitations.map((citation, i) => {
+                  const domain = citation.domain || (citation.url ? new URL(citation.url).hostname : 'gov.in');
+                  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+                  return (
+                    <a
+                      key={i}
+                      href={citation.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-emerald-300 transition flex items-center justify-between gap-3 shadow-2xs group"
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        <img
+                          src={faviconUrl}
+                          alt={domain}
+                          className="w-4 h-4 rounded-xs shrink-0 object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <div className="truncate">
+                          <p className="text-[11px] font-bold text-slate-900 group-hover:text-emerald-800 transition truncate">
+                            {citation.title || domain}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-mono truncate">
+                            {domain}
+                          </p>
+                        </div>
+                      </div>
+                      <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  );
+                })}
+              </div>
             </div>
+          )}
 
-            <div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Grounded Scheme Intelligence</span>
-            </div>
-          </div>
-
-          {/* Chat Messages Body */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/40">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-3 ${msg.sender === 'citizen' ? 'justify-end' : 'justify-start'}`}
-              >
-                {/* Assistant Avatar */}
-                {msg.sender === 'vani' && (
-                  <div className="h-8 w-8 rounded-2xl bg-emerald-700 text-white flex items-center justify-center shrink-0 font-bold text-xs shadow-xs">
-                    V
-                  </div>
-                )}
-
-                <div
-                  className={`max-w-[88%] rounded-3xl p-4 sm:p-5 text-xs leading-relaxed space-y-3 shadow-2xs ${
-                    msg.sender === 'citizen'
-                      ? 'bg-emerald-700 text-white rounded-br-xs'
-                      : 'bg-white text-slate-800 border border-slate-200 rounded-bl-xs'
-                  }`}
-                >
-                  {/* Message Sender Header */}
-                  <div className="flex items-center justify-between text-[11px] opacity-80 border-b border-black/5 pb-1.5">
-                    <span className="font-bold">
-                      {msg.sender === 'citizen' ? 'Citizen (ನೀವು)' : 'Vani-Bot Assistant'}
-                    </span>
-                    <span className="text-[10px]">{msg.timestamp}</span>
-                  </div>
-
-                  {/* Message Text Content */}
-                  <div className="whitespace-pre-line text-xs font-normal">
-                    {msg.text}
-                  </div>
-
-                  {/* Audio Playback Controls on Assistant Message */}
-                  {msg.sender === 'vani' && (
-                    <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                      <button
-                        onClick={() => playAudioResponse(msg.audioBase64, msg.text, msg.language)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                          currentlyPlayingAudio === msg.audioBase64
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                        }`}
-                      >
-                        <Volume2 className="h-3.5 w-3.5" />
-                        <span>
-                          {currentlyPlayingAudio === msg.audioBase64 ? 'Playing...' : 'Play Voice'}
+          {/* Matched Scheme Cards */}
+          {activeTurn.schemeCards && activeTurn.schemeCards.length > 0 && (
+            <div className="space-y-2.5 pt-2 border-t border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                {t.identifiedSchemes}
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {activeTurn.schemeCards.map((scheme, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-bold uppercase text-slate-400 font-mono">
+                          {scheme.category || 'WELFARE'}
                         </span>
-                      </button>
-
-                      {currentlyPlayingAudio === msg.audioBase64 && (
-                        <button
-                          onClick={stopAudioPlayback}
-                          className="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-700 hover:bg-rose-100 transition cursor-pointer"
-                        >
-                          Stop
-                        </button>
+                        <span className="text-[9px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                          Qualified
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-900 mt-1">
+                        {scheme.scheme_name}
+                      </h4>
+                      {scheme.benefit_amount && (
+                        <p className="text-[11px] font-bold text-emerald-700 font-mono mt-0.5">
+                          {scheme.benefit_amount}
+                        </p>
                       )}
                     </div>
-                  )}
 
-                  {/* Matched Scheme Cards */}
-                  {msg.schemeCards && msg.schemeCards.length > 0 && (
-                    <div className="space-y-2 pt-2">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                        Verified Scheme Matches:
-                      </span>
-                      {msg.schemeCards.map((sc) => (
-                        <div
-                          key={sc.scheme_id}
-                          className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800 space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h4 className="font-bold text-xs text-slate-900">
-                                {sc.scheme_name}
-                              </h4>
-                              {sc.category && (
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                                  {sc.category}
-                                </span>
-                              )}
-                            </div>
-                            {sc.eligible_status === true && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white shrink-0">
-                                Eligible (ಅರ್ಹ)
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Key benefits preview */}
-                          {sc.key_benefits.length > 0 && (
-                            <div className="text-[11px] text-slate-600 space-y-0.5">
-                              <span className="font-semibold text-slate-700">Entitlement: </span>
-                              <span>{sc.key_benefits[0]}</span>
-                            </div>
-                          )}
-
-                          {/* Quick Actions */}
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            {onOpenKagazCheck && (
-                              <button
-                                onClick={() => onOpenKagazCheck(sc.scheme_id)}
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                              >
-                                <FileCheck className="h-3 w-3" />
-                                <span>Audit in KagazCheck</span>
-                              </button>
-                            )}
-
-                            {onOpenParchaa && (
-                              <button
-                                onClick={() => onOpenParchaa(sc.scheme_id)}
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                              >
-                                <FileText className="h-3 w-3 text-emerald-700" />
-                                <span>Generate Parchaa</span>
-                              </button>
-                            )}
-
-                            {onOpenSchemeModal && (
-                              <button
-                                onClick={() => onOpenSchemeModal({
-                                  scheme_id: sc.scheme_id,
-                                  scheme_name: sc.scheme_name,
-                                })}
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                              >
-                                <span>View Details</span>
-                                <ArrowRight className="h-3 w-3" />
-                              </button>
-                            )}
-
-
-                            {sc.official_url && (
-                              <a
-                                href={sc.official_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-slate-700 px-1 py-1"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                <span>Portal</span>
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="pt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOpenParchaa && onOpenParchaa(scheme.scheme_id)}
+                        className="flex-1 py-1.5 text-center text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition cursor-pointer shadow-2xs"
+                      >
+                        {t.applyParchaa}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenSchemeModal && onOpenSchemeModal(scheme)}
+                        className="px-3 py-1.5 text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl transition cursor-pointer"
+                      >
+                        {t.details}
+                      </button>
                     </div>
-                  )}
-
-                  {/* Sources Footnote */}
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="pt-2 border-t border-black/5 flex items-center gap-1.5 text-[10px] text-slate-400">
-                      <Info className="h-3 w-3 text-emerald-600" />
-                      <span>Verified: {msg.sources.join(', ')}</span>
-                    </div>
-                  )}
-
-                  {/* Suggested Followups */}
-                  {msg.suggestedFollowups && msg.suggestedFollowups.length > 0 && (
-                    <div className="space-y-1.5 pt-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                        Tap to Speak / Ask:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {msg.suggestedFollowups.map((fUp, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => handleSelectPrompt(fUp)}
-                            className="text-[11px] px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-900 text-slate-700 text-left transition border border-slate-200/60 cursor-pointer"
-                          >
-                            {fUp}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ))}
               </div>
-            ))}
-            <div ref={chatBottomRef} />
-          </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

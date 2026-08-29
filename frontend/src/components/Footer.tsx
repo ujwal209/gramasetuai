@@ -1,142 +1,135 @@
-import { Compass, ShieldCheck, ExternalLink } from 'lucide-react';
+'use client';
+
+import React from 'react';
+import { type LanguageType } from '@/components/LanguageDropdown';
+import { translations } from '@/lib/translations';
 
 interface FooterProps {
-  onNavigateTab: (tab: 'home' | 'find' | 'explore' | 'profile' | 'applications') => void;
+  language?: LanguageType;
+  onTabChange?: (tab: string) => void;
 }
 
-export function Footer({ onNavigateTab }: FooterProps) {
+export function Footer({ language = 'en', onTabChange }: FooterProps) {
+  const t = translations[language]?.footer || translations.en.footer;
+
   return (
-    <footer className="bg-slate-900 text-slate-300 pt-14 pb-8 border-t border-slate-800 text-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+    <footer className="bg-card text-muted-foreground pt-12 pb-8 border-t border-border text-xs">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand & Mission */}
-          <div className="md:col-span-2 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold shadow-md shadow-emerald-900/50">
-                <Compass className="h-5 w-5" />
-              </div>
-              <div>
-                <span className="font-extrabold text-lg text-white tracking-tight">
-                  Gram<span className="text-emerald-400">Setu</span> AI
-                </span>
-                <p className="text-[11px] text-slate-400">ग्रामीण नागरिक सेतु</p>
-              </div>
+          <div className="md:col-span-2 space-y-4 text-left">
+            <div className="flex items-center">
+              <img
+                src="/logo.png"
+                alt="GramSetu"
+                className="h-10 sm:h-12 w-auto object-contain"
+              />
             </div>
 
-            <p className="text-slate-400 leading-relaxed text-xs max-w-md">
-              GramSetu AI is an AI-powered civic assistance platform empowering Indian citizens to
-              discover welfare schemes, understand statutory eligibility deterministically,
-              verify required documentation, and receive step-by-step application guidance.
+            <p className="text-muted-foreground leading-relaxed text-xs max-w-md font-normal">
+              {t.mission}
             </p>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-emerald-400">
-              <ShieldCheck className="h-4 w-4" />
-              <span>Grounded in Official Government Gazettes &amp; Portals</span>
-            </div>
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              {t.groundTruth}
+            </span>
           </div>
 
           {/* Quick Links */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-white uppercase tracking-wider text-xs">
-              Quick Access
-            </h4>
-            <ul className="space-y-2 text-slate-400">
+          <div className="space-y-3 text-left">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-foreground block">
+              {t.quickAccess}
+            </span>
+            <ul className="space-y-2 text-xs">
               <li>
                 <button
-                  onClick={() => onNavigateTab('find')}
-                  className="hover:text-emerald-400 transition cursor-pointer"
+                  onClick={() => onTabChange && onTabChange('schemes')}
+                  className="text-muted-foreground hover:text-foreground transition cursor-pointer"
                 >
-                  Find My Eligible Schemes
+                  {t.schemesLink}
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onNavigateTab('explore')}
-                  className="hover:text-emerald-400 transition cursor-pointer"
+                  onClick={() => onTabChange && onTabChange('schemes')}
+                  className="text-muted-foreground hover:text-foreground transition cursor-pointer"
                 >
-                  Explore Central &amp; State Schemes
+                  {t.directoryLink}
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onNavigateTab('applications')}
-                  className="hover:text-emerald-400 transition cursor-pointer"
+                  onClick={() => onTabChange && onTabChange('applications')}
+                  className="text-muted-foreground hover:text-foreground transition cursor-pointer"
                 >
-                  Application Tracking Checklist
+                  {t.trackingLink}
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onNavigateTab('profile')}
-                  className="hover:text-emerald-400 transition cursor-pointer"
+                  onClick={() => onTabChange && onTabChange('kagazcheck')}
+                  className="text-muted-foreground hover:text-foreground transition cursor-pointer"
                 >
-                  Citizen Profile &amp; Preferences
+                  {t.kagazcheckLink}
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onTabChange && onTabChange('parchaa')}
+                  className="text-muted-foreground hover:text-foreground transition cursor-pointer"
+                >
+                  {t.parchaaLink}
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* Verified Official Resources */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-white uppercase tracking-wider text-xs">
-              Official Portals
-            </h4>
-            <ul className="space-y-2 text-slate-400">
+          {/* Legal & Standards */}
+          <div className="space-y-3 text-left">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-foreground block">
+              {t.policyHeading}
+            </span>
+            <ul className="space-y-2 text-xs">
               <li>
-                <a
-                  href="https://www.india.gov.in"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 hover:text-emerald-400 transition"
-                >
-                  <span>National Portal of India</span>
-                  <ExternalLink className="h-3 w-3 text-slate-500" />
-                </a>
+                <span className="text-muted-foreground">
+                  {t.slaPolicy}
+                </span>
               </li>
               <li>
-                <a
-                  href="https://dbtbharat.gov.in"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 hover:text-emerald-400 transition"
-                >
-                  <span>DBT Bharat Direct Transfer</span>
-                  <ExternalLink className="h-3 w-3 text-slate-500" />
-                </a>
+                <span className="text-muted-foreground">
+                  {t.rtiPolicy}
+                </span>
               </li>
               <li>
-                <a
-                  href="https://pmkisan.gov.in"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 hover:text-emerald-400 transition"
-                >
-                  <span>PM-KISAN Samman Nidhi</span>
-                  <ExternalLink className="h-3 w-3 text-slate-500" />
-                </a>
+                <span className="text-muted-foreground">
+                  {t.grievancePolicy}
+                </span>
               </li>
               <li>
-                <a
-                  href="https://nha.gov.in/PM-JAY"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 hover:text-emerald-400 transition"
-                >
-                  <span>Ayushman Bharat PM-JAY</span>
-                  <ExternalLink className="h-3 w-3 text-slate-500" />
-                </a>
+                <span className="text-muted-foreground">
+                  {t.dbtPolicy}
+                </span>
+              </li>
+              <li>
+                <span className="text-muted-foreground">
+                  {t.gazettePolicy}
+                </span>
               </li>
             </ul>
           </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
-          <p>© {new Date().getFullYear()} GramSetu AI · Citizen Welfare Intelligence</p>
-          <div className="flex items-center gap-4">
-            <span>Free &amp; Open Civic Technology</span>
-            <span>·</span>
-            <span>Zero Brokerage / Zero Intermediary Policy</span>
+        {/* Bottom Strip */}
+        <div className="pt-6 border-t border-border/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px]">
+          <p className="text-muted-foreground">
+            © {new Date().getFullYear()} {t.copyright}
+          </p>
+          <div className="flex items-center gap-4 text-muted-foreground">
+            <span>{t.groundTruth}</span>
+            <span>•</span>
+            <span>Zero Middlemen</span>
+            <span>•</span>
+            <span>Direct Benefit Transfer</span>
           </div>
         </div>
       </div>

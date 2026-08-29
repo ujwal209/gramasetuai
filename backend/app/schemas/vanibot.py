@@ -10,6 +10,16 @@ class SupportedLanguageEnum(str, Enum):
     TELUGU = "te"
     TAMIL = "ta"
     MARATHI = "mr"
+    BENGALI = "bn"
+    GUJARATI = "gu"
+
+
+class VaniSourceCitation(BaseModel):
+    title: str
+    url: str
+    domain: str
+    favicon_url: str
+    snippet: str = ""
 
 
 class VaniSchemeCard(BaseModel):
@@ -18,11 +28,14 @@ class VaniSchemeCard(BaseModel):
     category: Optional[str] = None
     state: Optional[str] = None
     short_summary: str
+    benefit_amount: Optional[str] = None
     eligible_status: Optional[bool] = None
     match_score: Optional[float] = None
     key_benefits: List[str] = Field(default_factory=list)
     required_documents: List[str] = Field(default_factory=list)
     official_url: str = ""
+    domain: Optional[str] = None
+    favicon_url: Optional[str] = None
     kagazcheck_ready: bool = True
 
 
@@ -63,9 +76,9 @@ class VaniSpeakRequest(BaseModel):
 class VaniSpeakResponse(BaseModel):
     language: str
     audio_base64: Optional[str] = None
-    mime_type: str = "audio/mp3"
+    mime_type: str = "audio/wav"
     status: str = "success"
-    provider: str = "gtts"
+    provider: str = "sarvam"
     message: str = "Speech synthesis complete"
 
 
@@ -86,9 +99,11 @@ class VaniRespondResponse(BaseModel):
     intent: str
     reply_text: str
     reply_audio_base64: Optional[str] = None
+    ai_summary: Optional[str] = None
     scheme_cards: List[VaniSchemeCard] = Field(default_factory=list)
     action_links: List[VaniActionLink] = Field(default_factory=list)
     sources: List[str] = Field(default_factory=list)
+    source_citations: List[VaniSourceCitation] = Field(default_factory=list)
     suggested_followups: List[str] = Field(default_factory=list)
     context_scheme_id: Optional[str] = None
 
@@ -108,8 +123,38 @@ class VaniConversationTurnResponse(BaseModel):
     transcribed_query: str
     detected_language: str
     reply_text: str
-    reply_audio_base64: Optional[str] = None
-    scheme_cards: List[VaniSchemeCard] = Field(default_factory=list)
-    action_links: List[VaniActionLink] = Field(default_factory=list)
-    sources: List[str] = Field(default_factory=list)
     suggested_followups: List[str] = Field(default_factory=list)
+
+
+# 5. Conversation History & AI Summary Schemas
+class VaniConversationRecord(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+    session_id: str
+    title: str
+    language: str
+    query_text: str
+    response_text: str
+    audio_url: Optional[str] = None
+    ai_summary: Optional[str] = None
+    schemes_matched: List[Dict[str, Any]] = Field(default_factory=list)
+    detected_intent: Optional[str] = None
+    duration_seconds: Optional[int] = 12
+    turns: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: Optional[str] = None
+
+
+class SaveConversationRequest(BaseModel):
+    user_id: Optional[str] = None
+    session_id: str
+    title: Optional[str] = None
+    language: str = "kn"
+    query_text: str
+    response_text: str
+    audio_url: Optional[str] = None
+    ai_summary: Optional[str] = None
+    schemes_matched: List[Dict[str, Any]] = Field(default_factory=list)
+    detected_intent: Optional[str] = None
+    duration_seconds: Optional[int] = 12
+    turns: List[Dict[str, Any]] = Field(default_factory=list)
+

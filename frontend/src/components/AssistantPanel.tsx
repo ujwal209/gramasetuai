@@ -1,12 +1,6 @@
+'use client';
+
 import { useState } from 'react';
-import {
-  Sparkles,
-  X,
-  Send,
-  User,
-  Bot,
-  ShieldCheck,
-} from 'lucide-react';
 import type { CitizenProfile } from '../services/api';
 
 interface Message {
@@ -62,7 +56,6 @@ export function AssistantPanel({
     setMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setInput('');
 
-    // Generate grounded knowledge response based on verified scheme knowledge base
     setTimeout(() => {
       let reply = '';
       let sources = ['Official Scheme Guidelines'];
@@ -97,78 +90,62 @@ export function AssistantPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl border-l border-slate-200 text-left">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end animate-reveal">
+      <div className="bg-card w-full max-w-md h-full flex flex-col shadow-2xl border-l border-border text-left">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-emerald-600 flex items-center justify-center text-white font-bold shadow-xs">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm text-slate-900">GramSetu Assistant</h3>
-              <p className="text-[11px] text-slate-500">Grounded Civic Intelligence</p>
-            </div>
+        <div className="p-4 sm:p-5 border-b border-border bg-card flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="stamp-tag text-[#147466] dark:text-[#2dd4bf] border-[#147466] dark:border-[#2dd4bf]">
+              CIVIC INTELLIGENCE
+            </span>
+            <h3 className="font-bold text-sm text-foreground mt-1">GramSetu Assistant</h3>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+            className="px-2.5 py-1 text-xs font-code font-bold uppercase text-muted-foreground hover:text-foreground border border-border cursor-pointer"
           >
-            <X className="h-5 w-5" />
+            [ Close ]
           </button>
         </div>
 
         {/* Chat History */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {msg.sender === 'assistant' && (
-                <div className="h-7 w-7 rounded-full bg-emerald-700 text-white flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="h-4 w-4" />
-                </div>
-              )}
-
               <div
-                className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed space-y-1.5 shadow-2xs ${
+                className={`max-w-[88%] p-3.5 text-xs leading-relaxed space-y-1.5 border ${
                   msg.sender === 'user'
-                    ? 'bg-emerald-600 text-white rounded-br-xs'
-                    : 'bg-white text-slate-800 border border-slate-200 rounded-bl-xs'
+                    ? 'bg-foreground text-background border-foreground font-medium'
+                    : 'bg-card text-foreground border-border'
                 }`}
               >
-                <div className="prose prose-xs whitespace-pre-line font-normal">{msg.text}</div>
+                <div className="whitespace-pre-line font-normal">{msg.text}</div>
 
                 {msg.sources && msg.sources.length > 0 && (
-                  <div className="pt-1.5 border-t border-slate-100 flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
-                    <ShieldCheck className="h-3 w-3 text-emerald-600" />
-                    <span>Sources: {msg.sources.join(', ')}</span>
+                  <div className="pt-1.5 border-t border-border/40 font-code text-[10px] text-muted-foreground">
+                    SOURCES: {msg.sources.join(', ')}
                   </div>
                 )}
               </div>
-
-              {msg.sender === 'user' && (
-                <div className="h-7 w-7 rounded-full bg-slate-300 text-slate-700 flex items-center justify-center shrink-0 mt-0.5">
-                  <User className="h-4 w-4" />
-                </div>
-              )}
             </div>
           ))}
         </div>
 
         {/* Quick Suggested Prompts */}
-        <div className="p-3 border-t border-slate-200 bg-white space-y-1.5">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-            Suggested Inquiries:
+        <div className="p-3 border-t border-border bg-card space-y-1.5">
+          <span className="font-code text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+            SUGGESTED INQUIRIES:
           </span>
-          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
             {quickQuestions.map((q, idx) => (
               <button
                 key={idx}
                 onClick={() => handleSend(q)}
-                className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-900 text-slate-700 text-left transition cursor-pointer"
+                className="text-[10px] font-code px-2 py-1 bg-muted/60 hover:bg-muted text-foreground border border-border text-left transition cursor-pointer"
               >
                 {q}
               </button>
@@ -177,21 +154,21 @@ export function AssistantPanel({
         </div>
 
         {/* Message Input Box */}
-        <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center gap-2">
+        <div className="p-3 border-t border-border bg-card flex items-center gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask about scheme rules, documents, or benefits..."
-            className="flex-1 text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+            placeholder="Ask about scheme rules, documents..."
+            className="flex-1 h-10 px-3 text-xs bg-background text-foreground border border-border focus:border-foreground focus:outline-none"
           />
           <button
             onClick={() => handleSend()}
             disabled={!input.trim()}
-            className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 transition cursor-pointer"
+            className="btn-civic-primary h-10 px-4 text-xs shrink-0"
           >
-            <Send className="h-4 w-4" />
+            Send
           </button>
         </div>
       </div>

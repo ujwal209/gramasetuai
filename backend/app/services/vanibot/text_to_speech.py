@@ -1,137 +1,102 @@
-import asyncio
 import os
 import io
 import base64
 import logging
 from typing import Optional
 import httpx
-
 from app.schemas.vanibot import VaniSpeakResponse
 from app.services.vanibot.language_service import language_service
+from app.services.key_rotator import sarvam_pool
 
 logger = logging.getLogger(__name__)
 
+SARVAM_LANG_MAP = {
+    "kn": "kn-IN",
+    "hi": "hi-IN",
+    "en": "en-IN",
+    "te": "te-IN",
+    "ta": "ta-IN",
+    "mr": "mr-IN",
+    "bn": "bn-IN",
+    "gu": "gu-IN",
+}
 
-def _generate_gtts_bytes(text: str, lang: str) -> bytes:
-    from gtts import gTTS
-    mp3_fp = io.BytesIO()
-    tts = gTTS(text=text, lang=lang, slow=False)
-    tts.write_to_fp(mp3_fp)
-    mp3_fp.seek(0)
-    return mp3_fp.read()
 
-
-class VaniTextToSpeechService:
+class TextToSpeechService:
     """
-    Text-to-Speech provider abstraction for Indian regional languages.
-    Primary providers:
-      1. gTTS (Google Text-to-Speech) - isolated backend synthesis supporting Kannada ('kn'), Hindi ('hi'), English ('en').
-      2. OpenAI TTS ('tts-1') when OPENAI_API_KEY is configured.
-      3. Client-side Web Speech fallback instruction when offline.
-    Returns: Base64-encoded playable audio/mp3 string.
+    Text-to-Speech synthesis provider adapter for regional Indian languages.
+    Primary: Sarvam AI Bulbul v2 with high-fidelity neural voice stream.
+    Fallback: Client-side synthesis instructions.
     """
 
+    @classmethod
     async def synthesize_speech(
-        self,
+        cls,
         text: str,
         language: str = "kn",
         speed: float = 1.0,
     ) -> VaniSpeakResponse:
-        """
-        Synthesizes text into base64-encoded playable MP3 audio.
-        """
         lang_code = language_service.normalize_language_code(language)
+        target_locale = SARVAM_LANG_MAP.get(lang_code, "kn-IN")
+
         if not text or not text.strip():
             return VaniSpeakResponse(
                 language=lang_code,
                 audio_base64=None,
-                status="empty_text",
-                provider="none",
                 message="Text is empty.",
             )
 
-        clean_text = text.replace("*", "").replace("#", "").replace("`", "").strip()
-        # For voice conversational speech, synthesize the primary conversational statement (first 250 chars)
-        speech_chunk = clean_text
-        if len(clean_text) > 250:
-            # Cut at sentence boundary if possible
-            first_part = clean_text[:250]
-            if "." in first_part:
-                speech_chunk = first_part.rsplit(".", 1)[0] + "."
-            elif "\n" in first_part:
-                speech_chunk = first_part.rsplit("\n", 1)[0]
+        clean_text_for_speech = text.replace("#", "").replace("*", "").replace("`", "").replace(">", "").strip()
+        if len(clean_text_for_speech) > 450:
+            truncated = clean_text_for_speech[:450]
+            last_punc = max(truncated.rfind('.'), truncated.rfind('।'), truncated.rfind('?'), truncated.rfind('!'), truncated.rfind('\n'))
+            if last_punc > 80:
+                clean_text_for_speech = truncated[:last_punc + 1].strip()
             else:
-                speech_chunk = first_part
+                clean_text_for_speech = truncated.strip()
 
-        # Provider 1: gTTS (Google Text to Speech Python library) with non-blocking async thread and timeout
-        try:
-            tts_lang_map = {
-                "kn": "kn",
-                "hi": "hi",
-                "en": "en",
-                "te": "te",
-                "ta": "ta",
-                "mr": "mr",
-            }
-            target_gtts_lang = tts_lang_map.get(lang_code, "kn")
-            
-            raw_mp3_bytes = await asyncio.wait_for(
-                asyncio.to_thread(_generate_gtts_bytes, speech_chunk, target_gtts_lang),
-                timeout=4.0,
-            )
-            
-            audio_b64 = base64.b64encode(raw_mp3_bytes).decode("utf-8")
-            return VaniSpeakResponse(
-                language=lang_code,
-                audio_base64=audio_b64,
-                mime_type="audio/mp3",
-                status="success",
-                provider="gtts",
-                message="Synthesized via isolated gTTS regional engine.",
-            )
-        except Exception as e:
-            logger.warning(f"gTTS backend synthesis exception/timeout: {e}")
-
-        # Provider 2: OpenAI TTS API
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key and len(openai_key) > 5:
-            try:
-                url = "https://api.openai.com/v1/audio/speech"
-                headers = {
-                    "Authorization": f"Bearer {openai_key}",
-                    "Content-Type": "application/json",
-                }
-                payload = {
-                    "model": "tts-1",
-                    "input": speech_chunk[:400],
-                    "voice": "nova" if lang_code == "hi" else "alloy",
-                    "response_format": "mp3",
-                    "speed": speed,
-                }
-                async with httpx.AsyncClient(timeout=4.0) as client:
-                    res = await client.post(url, headers=headers, json=payload)
-                    if res.status_code == 200:
-                        audio_b64 = base64.b64encode(res.content).decode("utf-8")
-                        return VaniSpeakResponse(
-                            language=lang_code,
-                            audio_base64=audio_b64,
-                            mime_type="audio/mp3",
-                            status="success",
-                            provider="openai_tts",
-                            message="Synthesized via OpenAI neural TTS.",
+        sarvam_keys = sarvam_pool.get_all_keys()
+        if sarvam_keys:
+            for key_idx, key in enumerate(sarvam_keys):
+                try:
+                    headers = {
+                        "api-subscription-key": key,
+                        "Content-Type": "application/json",
+                    }
+                    payload = {
+                        "inputs": [clean_text_for_speech],
+                        "target_language_code": target_locale,
+                        "speaker": "anushka",
+                        "model": "bulbul:v2",
+                    }
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        resp = await client.post(
+                            "https://api.sarvam.ai/text-to-speech",
+                            headers=headers,
+                            json=payload,
                         )
-            except Exception as e:
-                logger.warning(f"OpenAI TTS provider exception: {e}")
+                        if resp.status_code == 200:
+                            audios = resp.json().get("audios", [])
+                            if audios and len(audios[0]) > 100:
+                                logger.info(f"[Sarvam TTS] Key #{key_idx + 1} generated voice audio in {target_locale}.")
+                                return VaniSpeakResponse(
+                                    language=lang_code,
+                                    audio_base64=audios[0],
+                                    mime_type="audio/wav",
+                                    provider="sarvam",
+                                    message="Synthesized via Sarvam AI Bulbul v2 Neural Voice",
+                                )
+                except Exception as e:
+                    logger.warning(f"[Sarvam TTS] Key #{key_idx + 1} failed: {e}. Trying next...")
+                    continue
 
-        # Provider 3: Fallback signaling browser SpeechSynthesis
         return VaniSpeakResponse(
             language=lang_code,
             audio_base64=None,
             mime_type="audio/mp3",
-            status="client_playback",
-            provider="web_speech_api",
-            message="Server audio synthesis offline; browser Web Speech API enabled for playback.",
+            provider="client_fallback",
+            message="Client-side SpeechSynthesis ready.",
         )
 
 
-text_to_speech_service = VaniTextToSpeechService()
+text_to_speech_service = TextToSpeechService()

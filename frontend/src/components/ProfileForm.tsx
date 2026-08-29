@@ -1,13 +1,7 @@
+'use client';
+
 import { useState, type FormEvent } from 'react';
-import {
-  Search,
-  Sparkles,
-  User,
-  MapPin,
-  Briefcase,
-  RefreshCw,
-  Info,
-} from 'lucide-react';
+import { CustomDropdown } from '@/components/CustomDropdown';
 import type { CitizenProfile } from '../services/api';
 
 interface ProfileFormProps {
@@ -30,7 +24,7 @@ export function ProfileForm({ initialProfile, onSubmit, loading }: ProfileFormPr
         age: 42,
         income: 180000,
         state: 'Karnataka',
-        district: 'Tumakuru',
+        district: 'Mandya',
         gender: 'male',
         occupation: 'farmer',
         landholding: 2.5,
@@ -53,13 +47,13 @@ export function ProfileForm({ initialProfile, onSubmit, loading }: ProfileFormPr
       };
       setProfile(p);
       onSubmit(p);
-    } else if (preset === 'youth_artisan') {
+    } else {
       const p: CitizenProfile = {
-        age: 21,
+        age: 22,
         income: 90000,
         state: 'Rajasthan',
         district: 'Jaipur',
-        gender: 'female',
+        gender: 'male',
         occupation: 'artisan',
         landholding: 0,
         category: 'SC',
@@ -71,69 +65,63 @@ export function ProfileForm({ initialProfile, onSubmit, loading }: ProfileFormPr
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
-      {/* Header */}
-      <div className="space-y-2 border-b border-slate-100 pb-5 text-left">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200/70">
-          <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-          <span>YojanaMatch Intelligent Profiler</span>
-        </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-          Find Schemes You're Eligible For
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-          Tell us a little about yourself. GramSetu AI will compare your profile against
-          verified statutory scheme rules deterministically.
-        </p>
-      </div>
-
-      {/* Test Sample Profiles */}
-      <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-left">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-            <Info className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Quick Sample Profiles</span>
+    <div className="p-6 sm:p-8 bg-card border border-border corner-accent space-y-6 text-left shadow-xs animate-sleek">
+      {/* Top Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+        <div className="space-y-1">
+          <span className="badge-sleek badge-sleek-active">
+            CITIZEN ELIGIBILITY EVALUATOR
           </span>
-          <span className="text-[10px] text-slate-500">Tap to auto-fill &amp; test</span>
+          <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+            Deterministic Scheme Matcher
+          </h2>
+          <p className="text-xs text-muted-foreground font-sans-sleek">
+            Provide citizen demographic and land attributes to evaluate 100% verified statutory welfare rules.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => loadPreset('farmer_karnataka')}
-            className="text-xs px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 text-slate-700 font-semibold border border-slate-200 shadow-2xs transition cursor-pointer"
-          >
-            🌾 Small Farmer (Karnataka, BPL)
-          </button>
-          <button
-            type="button"
-            onClick={() => loadPreset('rural_mother')}
-            className="text-xs px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 text-slate-700 font-semibold border border-slate-200 shadow-2xs transition cursor-pointer"
-          >
-            🤰 Expectant Mother (UP)
-          </button>
-          <button
-            type="button"
-            onClick={() => loadPreset('youth_artisan')}
-            className="text-xs px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 text-slate-700 font-semibold border border-slate-200 shadow-2xs transition cursor-pointer"
-          >
-            🛠️ Artisan / BPL (Rajasthan)
-          </button>
+
+        {/* Quick Demo Personas */}
+        <div className="space-y-1 text-left sm:text-right">
+          <span className="font-mono-code text-[10px] font-bold text-muted-foreground uppercase block">
+            DEMO PROFILES:
+          </span>
+          <div className="flex flex-wrap gap-1 justify-start sm:justify-end">
+            <button
+              type="button"
+              onClick={() => loadPreset('farmer_karnataka')}
+              className="px-2 py-1 bg-muted/60 hover:bg-muted border border-border text-[10px] font-mono-code font-bold uppercase transition cursor-pointer"
+            >
+              [ KA Farmer ]
+            </button>
+            <button
+              type="button"
+              onClick={() => loadPreset('rural_mother')}
+              className="px-2 py-1 bg-muted/60 hover:bg-muted border border-border text-[10px] font-mono-code font-bold uppercase transition cursor-pointer"
+            >
+              [ UP Mother ]
+            </button>
+            <button
+              type="button"
+              onClick={() => loadPreset('youth_artisan')}
+              className="px-2 py-1 bg-muted/60 hover:bg-muted border border-border text-[10px] font-mono-code font-bold uppercase transition cursor-pointer"
+            >
+              [ Artisan ]
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Profile Questionnaire Form */}
-      <form onSubmit={handleSubmit} className="space-y-6 text-left">
-        {/* Section 1: Personal Demographics */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Section 1: Demographics */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-            <User className="h-3.5 w-3.5 text-emerald-600" />
-            <span>1. Personal &amp; Geographic Information</span>
-          </h3>
+          <span className="font-mono-code text-[10px] font-bold uppercase tracking-widest text-muted-foreground block border-b border-border pb-1.5">
+            01 // DEMOGRAPHIC ATTRIBUTES
+          </span>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Age (in years)
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono-code font-bold uppercase text-muted-foreground block">
+                Age
               </label>
               <input
                 type="number"
@@ -146,72 +134,55 @@ export function ProfileForm({ initialProfile, onSubmit, loading }: ProfileFormPr
                     age: e.target.value ? Number(e.target.value) : undefined,
                   })
                 }
-                placeholder="e.g. 42"
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                placeholder="42"
+                className="input-sleek font-mono-code"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Gender</label>
-              <select
-                value={profile.gender ?? ''}
-                onChange={(e) =>
-                  setProfile({ ...profile, gender: e.target.value || undefined })
-                }
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white transition"
-              >
-                <option value="">-- Select Gender --</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+            <CustomDropdown
+              label="Gender"
+              value={profile.gender ?? ''}
+              onChange={(val) => setProfile({ ...profile, gender: val || undefined })}
+              options={[
+                { value: '', label: 'Select Gender...' },
+                { value: 'male', label: 'Male' },
+                { value: 'female', label: 'Female' },
+                { value: 'transgender', label: 'Transgender' },
+              ]}
+            />
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                State of Residence
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={profile.state ?? ''}
-                  onChange={(e) =>
-                    setProfile({ ...profile, state: e.target.value || undefined })
-                  }
-                  placeholder="e.g. Karnataka, Uttar Pradesh"
-                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
-                />
-                <MapPin className="h-4 w-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                District / Taluk
-              </label>
-              <input
-                type="text"
-                value={profile.district ?? ''}
-                onChange={(e) =>
-                  setProfile({ ...profile, district: e.target.value || undefined })
-                }
-                placeholder="e.g. Tumakuru, Varanasi"
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
-              />
-            </div>
+            <CustomDropdown
+              label="State / Region"
+              value={profile.state ?? ''}
+              onChange={(val) => setProfile({ ...profile, state: val || undefined })}
+              options={[
+                { value: '', label: 'Select State...' },
+                { value: 'Karnataka', label: 'Karnataka' },
+                { value: 'Maharashtra', label: 'Maharashtra' },
+                { value: 'Uttar Pradesh', label: 'Uttar Pradesh' },
+                { value: 'Tamil Nadu', label: 'Tamil Nadu' },
+                { value: 'Andhra Pradesh', label: 'Andhra Pradesh' },
+                { value: 'Telangana', label: 'Telangana' },
+                { value: 'Rajasthan', label: 'Rajasthan' },
+                { value: 'Punjab', label: 'Punjab' },
+                { value: 'Madhya Pradesh', label: 'Madhya Pradesh' },
+                { value: 'Bihar', label: 'Bihar' },
+                { value: 'Gujarat', label: 'Gujarat' },
+              ]}
+              searchable={true}
+            />
           </div>
         </div>
 
-        {/* Section 2: Socio-Economic Profile */}
-        <div className="space-y-3 pt-2">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-            <Briefcase className="h-3.5 w-3.5 text-emerald-600" />
-            <span>2. Occupation &amp; Household Economics</span>
-          </h3>
+        {/* Section 2: Economics & Landholding */}
+        <div className="space-y-3">
+          <span className="font-mono-code text-[10px] font-bold uppercase tracking-widest text-muted-foreground block border-b border-border pb-1.5">
+            02 // OCCUPATION &amp; FARM CRITERIA
+          </span>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono-code font-bold uppercase text-muted-foreground block">
                 Primary Occupation
               </label>
               <input
@@ -221,12 +192,12 @@ export function ProfileForm({ initialProfile, onSubmit, loading }: ProfileFormPr
                   setProfile({ ...profile, occupation: e.target.value || undefined })
                 }
                 placeholder="e.g. farmer, artisan, student"
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                className="input-sleek"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono-code font-bold uppercase text-muted-foreground block">
                 Annual Household Income (₹)
               </label>
               <input
@@ -240,13 +211,13 @@ export function ProfileForm({ initialProfile, onSubmit, loading }: ProfileFormPr
                     income: e.target.value ? Number(e.target.value) : undefined,
                   })
                 }
-                placeholder="e.g. 180000"
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                placeholder="180000"
+                className="input-sleek font-mono-code"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono-code font-bold uppercase text-muted-foreground block">
                 Agricultural Landholding (Acres)
               </label>
               <input
@@ -260,91 +231,64 @@ export function ProfileForm({ initialProfile, onSubmit, loading }: ProfileFormPr
                     landholding: e.target.value ? Number(e.target.value) : undefined,
                   })
                 }
-                placeholder="e.g. 2.5 (0 if landless)"
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                placeholder="2.5 (0 if landless)"
+                className="input-sleek font-mono-code"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Social Category
-              </label>
-              <select
-                value={profile.category ?? ''}
-                onChange={(e) =>
-                  setProfile({ ...profile, category: e.target.value || undefined })
-                }
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white transition"
-              >
-                <option value="">-- Select Category --</option>
-                <option value="General">General</option>
-                <option value="OBC">OBC (Other Backward Classes)</option>
-                <option value="SC">SC (Scheduled Caste)</option>
-                <option value="ST">ST (Scheduled Tribe)</option>
-              </select>
-            </div>
+            <CustomDropdown
+              label="Social Category"
+              value={profile.category ?? ''}
+              onChange={(val) => setProfile({ ...profile, category: val || undefined })}
+              options={[
+                { value: '', label: 'Select Category...' },
+                { value: 'General', label: 'General' },
+                { value: 'OBC', label: 'OBC (Other Backward Classes)' },
+                { value: 'SC', label: 'SC (Scheduled Caste)' },
+                { value: 'ST', label: 'ST (Scheduled Tribe)' },
+              ]}
+            />
           </div>
 
           <div className="pt-2">
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Do you hold a Below Poverty Line (BPL) or Antyodaya Ration Card?
+            <label className="block text-[10px] font-mono-code font-bold uppercase text-muted-foreground mb-1.5">
+              Ration Card Status:
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label
-                className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setProfile({ ...profile, bpl: true })}
+                className={`p-2 text-xs font-mono-code text-left border cursor-pointer ${
                   profile.bpl === true
-                    ? 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-semibold'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'bg-foreground text-background border-foreground font-bold'
+                    : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted'
                 }`}
               >
-                <input
-                  type="radio"
-                  name="bpl_opt"
-                  checked={profile.bpl === true}
-                  onChange={() => setProfile({ ...profile, bpl: true })}
-                  className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                />
-                <span className="text-xs">Yes (BPL / SECC Card Holder)</span>
-              </label>
-
-              <label
-                className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+                [ YES — BPL / Antyodaya ]
+              </button>
+              <button
+                type="button"
+                onClick={() => setProfile({ ...profile, bpl: false })}
+                className={`p-2 text-xs font-mono-code text-left border cursor-pointer ${
                   profile.bpl === false
-                    ? 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-semibold'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'bg-foreground text-background border-foreground font-bold'
+                    : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted'
                 }`}
               >
-                <input
-                  type="radio"
-                  name="bpl_opt"
-                  checked={profile.bpl === false}
-                  onChange={() => setProfile({ ...profile, bpl: false })}
-                  className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                />
-                <span className="text-xs">No / Non-BPL</span>
-              </label>
+                [ NO — Non-BPL / General ]
+              </button>
             </div>
           </div>
         </div>
 
         {/* Action Button */}
-        <div className="pt-4 border-t border-slate-100">
+        <div className="pt-3 border-t border-border">
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md shadow-emerald-200 hover:shadow-lg transition-all disabled:opacity-50 cursor-pointer"
+            className="w-full btn-primary-sleek h-11 text-xs"
           >
-            {loading ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <span>Evaluating Eligibility Rules...</span>
-              </>
-            ) : (
-              <>
-                <Search className="h-4 w-4" />
-                <span>Find My Eligible Schemes</span>
-              </>
-            )}
+            {loading ? 'Evaluating Gazette Rules...' : 'Find My Eligible Schemes'}
           </button>
         </div>
       </form>

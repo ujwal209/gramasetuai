@@ -123,3 +123,71 @@ async def conversation(req: VaniConversationTurnRequest):
 async def clear_session(session_id: str = Form(...)):
     vanibot_service.clear_session(session_id)
     return {"status": "success", "message": f"Session {session_id} memory cleared."}
+
+
+# ----------------------------------------------------
+# Vani-Bot Conversation History & AI Summary Endpoints
+# ----------------------------------------------------
+from app.schemas.vanibot import VaniConversationRecord, SaveConversationRequest
+from app.services.vanibot import history_service
+
+
+@router.post(
+    "/history",
+    response_model=VaniConversationRecord,
+    summary="Save Vani Conversation to Database",
+    description="Stores citizen voice conversation, Cloudinary audio URL, matched schemes, and structured AI summary in MongoDB.",
+)
+async def save_history(req: SaveConversationRequest):
+    try:
+        return await history_service.save_conversation(req)
+    except Exception as e:
+        logger.error(f"Error saving Vani conversation history: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save conversation: {str(e)}",
+        )
+
+
+@router.get(
+    "/history",
+    response_model=List[VaniConversationRecord],
+    summary="Get Citizen Voice Conversation Archives",
+    description="Fetches past voice conversations with AI summaries and Cloudinary MP3 playback URLs.",
+)
+async def get_history(user_id: Optional[str] = None, session_id: Optional[str] = None):
+    try:
+        return await history_service.get_conversations(user_id=user_id, session_id=session_id)
+    except Exception as e:
+        logger.error(f"Error retrieving Vani history: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get conversation history: {str(e)}",
+        )
+
+
+@router.get(
+    "/history/{conv_id}",
+    response_model=VaniConversationRecord,
+    summary="Get Detailed Voice Conversation Breakdown",
+    description="Returns detailed turn-by-turn dialogue, AI summary, and audio playback link for a conversation.",
+)
+async def get_history_detail(conv_id: str):
+    record = await history_service.get_conversation_by_id(conv_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation record not found",
+        )
+    return record
+
+
+@router.delete(
+    "/history/{conv_id}",
+    summary="Delete Voice Conversation Archive",
+    description="Removes a conversation record from database.",
+)
+async def delete_history_item(conv_id: str):
+    res = await history_service.delete_conversation(conv_id)
+    return {"status": "success", "deleted": res}
+

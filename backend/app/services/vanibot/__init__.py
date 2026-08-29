@@ -47,14 +47,7 @@ class VaniBotService:
         )
 
     async def respond(self, req: VaniRespondRequest) -> VaniRespondResponse:
-        response = conversation_service.respond(req)
-        if req.include_audio and response.reply_text:
-            speak_res = await text_to_speech_service.synthesize_speech(
-                text=response.reply_text,
-                language=response.language,
-            )
-            response.reply_audio_base64 = speak_res.audio_base64
-        return response
+        return await conversation_service.respond(req)
 
     async def process_conversation_turn(
         self,

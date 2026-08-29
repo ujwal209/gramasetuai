@@ -1,434 +1,452 @@
-import { useEffect, useState } from 'react';
-import { Navbar, type TabType, type LanguageType } from './components/Navbar';
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { LanguageDropdown } from '@/components/LanguageDropdown';
+import { ShowcaseSlider } from './components/ShowcaseSlider';
+import { KisanChaupalSection } from './components/KisanChaupalSection';
+import { FeatureExplorer } from './components/FeatureExplorer';
 import { Footer } from './components/Footer';
-import { Hero } from './components/Hero';
-import { HowItWorks } from './components/HowItWorks';
-import { PopularSchemes } from './components/PopularSchemes';
-import { ProfileForm } from './components/ProfileForm';
-import { MatchResults } from './components/MatchResults';
-import { SchemeDetailsModal } from './components/SchemeDetailsModal';
-import { MyProfileView } from './components/MyProfileView';
-import { MyApplicationsView, type ApplicationRecord } from './components/MyApplicationsView';
-import { AssistantPanel } from './components/AssistantPanel';
-import { KagazCheckAuditor } from './components/KagazCheckAuditor';
-import { VaniBot } from './components/VaniBot';
-import { ParchaaGenerator } from './components/ParchaaGenerator';
-import {
-  fetchActiveSchemes,
-  matchEligibility,
-  type CitizenProfile,
-  type EligibilityMatchResponse,
-  type SchemeData,
-  type SchemeMatchResult,
-} from './services/api';
-import { Search, Sparkles, BookOpen, AlertCircle } from 'lucide-react';
-
-
+import { useAuth } from './context/AuthContext';
+import { useLanguage } from './context/LanguageContext';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<TabType>('home');
-  const [language, setLanguage] = useState<LanguageType>('en');
+  const router = useRouter();
+  const { user, token, handleLogout } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Citizen Profile State
-  const [profile, setProfile] = useState<CitizenProfile>({
-    age: 42,
-    income: 180000,
-    state: 'Karnataka',
-    district: 'Tumakuru',
-    gender: 'male',
-    occupation: 'farmer',
-    landholding: 2.5,
-    category: 'OBC',
-    bpl: true,
-  });
-
-  // Schemes from PostgreSQL Database
-  const [schemes, setSchemes] = useState<SchemeData[]>([]);
-  const [loadingSchemes, setLoadingSchemes] = useState<boolean>(true);
-
-  // YojanaMatch State
-  const [matching, setMatching] = useState<boolean>(false);
-  const [matchResponse, setMatchResponse] = useState<EligibilityMatchResponse | null>(null);
-  const [matchError, setMatchError] = useState<string | null>(null);
-
-  // Scheme Details Modal State
-  const [selectedScheme, setSelectedScheme] = useState<SchemeData | SchemeMatchResult | null>(null);
-
-  // KagazCheck Scoped Scheme State
-  const [targetKagazCheckScheme, setTargetKagazCheckScheme] = useState<SchemeData | SchemeMatchResult | null>(null);
-
-  // Parchaa Generator Scoped Scheme State
-  const [targetParchaaScheme, setTargetParchaaScheme] = useState<SchemeData | SchemeMatchResult | null>(null);
-
-  // Assistant Drawer State
-  const [assistantOpen, setAssistantOpen] = useState<boolean>(false);
-
-
-  // Application Dossiers Tracking State
-  const [applications, setApplications] = useState<ApplicationRecord[]>([
-    {
-      id: 'app-1',
-      schemeId: 'pm-kisan-001',
-      schemeName: 'Pradhan Mantri Kisan Samman Nidhi (PM-KISAN)',
-      category: 'Agriculture',
-      status: 'Ready to Apply',
-      documentsTotal: 4,
-      documentsReady: 4,
-      lastUpdated: 'Today',
-      nextAction: 'Submit Aadhaar & Land RoR on pmkisan.gov.in or at nearest CSC Kendra',
-      officialUrl: 'https://pmkisan.gov.in',
-      requiredDocuments: [
-        'Aadhaar Card',
-        'Proof of Agricultural Land Ownership (ROR / Khasra)',
-        'Aadhaar-seeded Bank Passbook',
-        'Mobile Number linked with Aadhaar',
-      ],
-    },
-    {
-      id: 'app-2',
-      schemeId: 'pmay-g-002',
-      schemeName: 'Pradhan Mantri Awas Yojana - Gramin (PMAY-G)',
-      category: 'Housing & Rural Development',
-      status: 'Documents Required',
-      documentsTotal: 5,
-      documentsReady: 3,
-      lastUpdated: 'Yesterday',
-      nextAction: 'Verify SECC / BPL list enrollment at Gram Panchayat office',
-      officialUrl: 'https://pmayg.nic.in',
-      requiredDocuments: [
-        'Aadhaar Card',
-        'BPL Ration Card / SECC 2011 Verification Document',
-        'Bank Account Passbook (Aadhaar linked)',
-        'Homestead Land Ownership / Allotment Order',
-        'MGNREGA Job Card',
-      ],
-    },
-  ]);
-
-  // Load Database Schemes on Mount
-  useEffect(() => {
-    async function loadSchemes() {
-      try {
-        setLoadingSchemes(true);
-        const data = await fetchActiveSchemes();
-        setSchemes(data);
-      } catch (err) {
-        console.error('Failed to fetch schemes:', err);
-      } finally {
-        setLoadingSchemes(false);
-      }
-    }
-    loadSchemes();
-  }, []);
-
-  // Handle Eligibility Matching Request
-  const handleRunMatch = async (profileToMatch: CitizenProfile) => {
-    setProfile(profileToMatch);
-    setMatching(true);
-    setMatchError(null);
-    setCurrentTab('find');
-    try {
-      const response = await matchEligibility(profileToMatch);
-      setMatchResponse(response);
-    } catch (err: unknown) {
-      let msg = 'Failed to evaluate eligibility. Please check backend connection.';
-      if (err instanceof Error) msg = err.message;
-      setMatchError(msg);
-    } finally {
-      setMatching(false);
+  const handleFeatureClick = (route: string) => {
+    setMobileMenuOpen(false);
+    if (user && token) {
+      router.push(route);
+    } else {
+      router.push(`/auth/login`);
     }
   };
-
-  // Add Scheme to Applications Dossier
-  const handleStartApplication = (scheme: SchemeData | SchemeMatchResult) => {
-    const sId = 'id' in scheme ? scheme.id : scheme.scheme_id;
-    const sName = 'name' in scheme ? scheme.name : scheme.scheme_name;
-    const sCat = ('category' in scheme && scheme.category) ? scheme.category : 'General Welfare';
-    const sDocs = scheme.required_documents || [];
-    const sUrl = scheme.official_source_url;
-
-    // Check if already in applications
-    const exists = applications.find((a) => a.schemeId === sId);
-    if (!exists) {
-      const newApp: ApplicationRecord = {
-        id: `app-${Date.now()}`,
-        schemeId: sId,
-        schemeName: sName,
-        category: sCat,
-        status: 'Preparing',
-        documentsTotal: sDocs.length,
-        documentsReady: 1,
-        lastUpdated: 'Just now',
-        nextAction: 'Audit required certificates and verify at Gram Panchayat',
-        officialUrl: sUrl,
-        requiredDocuments: sDocs,
-      };
-      setApplications((prev) => [newApp, ...prev]);
-    }
-    setCurrentTab('applications');
-  };
-
-  // Handle Open KagazCheck Document Auditor
-  const handleOpenKagazCheck = (schemeOrId?: SchemeData | SchemeMatchResult | string) => {
-    if (schemeOrId) {
-      if (typeof schemeOrId === 'string') {
-        const found = schemes.find((s) => s.id === schemeOrId);
-        if (found) setTargetKagazCheckScheme(found);
-      } else {
-        setTargetKagazCheckScheme(schemeOrId);
-      }
-    }
-    setCurrentTab('kagazcheck');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Handle Open Parchaa Generator
-  const handleOpenParchaa = (schemeOrId?: SchemeData | SchemeMatchResult | string) => {
-    if (schemeOrId) {
-      if (typeof schemeOrId === 'string') {
-        const found = schemes.find((s) => s.id === schemeOrId);
-        if (found) setTargetParchaaScheme(found);
-      } else {
-        setTargetParchaaScheme(schemeOrId);
-      }
-    }
-    setCurrentTab('parchaa');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-between selection:bg-emerald-100 selection:text-emerald-900 font-sans">
-      {/* Production Header Navigation */}
-      <Navbar
-        currentTab={currentTab}
-        onTabChange={setCurrentTab}
-        language={language}
-        onLanguageChange={setLanguage}
-        onOpenAssistant={() => setAssistantOpen(true)}
-        applicationsCount={applications.length}
-      />
+    <div className="min-h-screen bg-white text-foreground flex flex-col justify-between selection:bg-primary selection:text-primary-foreground animate-sleek w-full relative">
+      {/* 1. TOP STICKY SOLID NAVBAR */}
+      <header className="sticky top-0 z-50 w-full navbar-solid shadow-xs border-b border-border">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full">
+          <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
+            {/* Brand Logo - Standalone Large Image */}
+            <Link
+              href="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center focus:outline-none shrink-0 py-1"
+            >
+              <img
+                src="/logo.png"
+                alt="GramSetu"
+                className="h-10 sm:h-12 md:h-14 w-auto object-contain"
+              />
+            </Link>
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full">
-        {/* VIEW 1: HOME PAGE */}
-        {currentTab === 'home' && (
-          <div>
-            <Hero
-              onFindSchemes={() => {
-                setCurrentTab('find');
-                if (!matchResponse) handleRunMatch(profile);
-              }}
-              onExploreSchemes={() => setCurrentTab('explore')}
-              onOpenVaniBot={() => setCurrentTab('vanibot')}
-            />
+            {/* Desktop Navigation Links - Dynamic Multilingual */}
+            <nav className="hidden lg:flex items-center gap-2 xl:gap-3">
+              <a
+                href="#showcase"
+                className="px-3.5 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition"
+              >
+                {t.nav.overview}
+              </a>
+              <a
+                href="#kisan-chaupal"
+                className="px-3.5 py-2 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg transition"
+              >
+                {t.nav.kisanChaupal}
+              </a>
+              <a
+                href="#tools"
+                className="px-3.5 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition"
+              >
+                {t.nav.features}
+              </a>
+              <a
+                href="#how-it-works"
+                className="px-3.5 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition"
+              >
+                {t.nav.howItWorks}
+              </a>
+            </nav>
 
+            {/* Right Action Controls */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <LanguageDropdown value={language} onChange={setLanguage} />
 
-            <HowItWorks />
+              {/* Desktop Auth Controls */}
+              {user ? (
+                <div className="hidden sm:flex items-center gap-2">
+                  <Link
+                    href="/dashboard"
+                    className="btn-primary-sleek h-9 px-4 text-xs font-bold"
+                  >
+                    {t.nav.dashboard}
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="btn-outline-sleek h-9 px-3.5 text-xs font-bold"
+                  >
+                    {t.nav.logout}
+                  </button>
+                </div>
+              ) : (
+                <div className="hidden sm:flex items-center gap-2">
+                  <Link
+                    href="/auth/login"
+                    className="px-3.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    {t.nav.signIn}
+                  </Link>
+                  <Link
+                    href="/auth/signup"
+                    className="btn-primary-sleek h-9 px-4 text-xs font-bold"
+                  >
+                    {t.nav.register}
+                  </Link>
+                </div>
+              )}
 
-            <PopularSchemes
-              schemes={schemes}
-              loading={loadingSchemes}
-              onViewDetails={(s) => setSelectedScheme(s)}
-              onCheckEligibility={() => {
-                setCurrentTab('find');
-                if (!matchResponse) handleRunMatch(profile);
-              }}
-            />
+              {/* Mobile Hamburger Menu Button */}
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden p-2 rounded-lg border border-border bg-white text-foreground text-xs font-bold uppercase transition hover:bg-slate-50 focus:outline-none"
+                aria-label="Toggle Navigation Menu"
+              >
+                {mobileMenuOpen ? t.nav.close : t.nav.menu}
+              </button>
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* VIEW 2: FIND SCHEMES & MATCH RESULTS */}
-        {currentTab === 'find' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              {/* Left Column: Form Questionnaire */}
-              <div className="lg:col-span-5">
-                <ProfileForm
-                  initialProfile={profile}
-                  onSubmit={handleRunMatch}
-                  loading={matching}
-                />
+        {/* Mobile Dropdown / Drawer */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-border bg-white p-4 space-y-4 animate-sleek shadow-xl">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block px-1">
+                {t.nav.navigation}
+              </span>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <a
+                  href="#showcase"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 rounded-lg bg-slate-50 text-xs font-semibold text-foreground hover:bg-slate-100 block text-center"
+                >
+                  {t.nav.overview}
+                </a>
+                <a
+                  href="#kisan-chaupal"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 rounded-lg bg-primary/10 text-primary text-xs font-bold block text-center"
+                >
+                  {t.nav.kisanChaupal}
+                </a>
+                <a
+                  href="#tools"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 rounded-lg bg-slate-50 text-xs font-semibold text-foreground hover:bg-slate-100 block text-center"
+                >
+                  {t.nav.features}
+                </a>
+                <a
+                  href="#how-it-works"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 rounded-lg bg-slate-50 text-xs font-semibold text-foreground hover:bg-slate-100 block text-center"
+                >
+                  {t.nav.howItWorks}
+                </a>
               </div>
+            </div>
 
-              {/* Right Column: Matched Schemes */}
-              <div className="lg:col-span-7">
-                {matchError && (
-                  <div className="p-5 rounded-3xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold">Eligibility Match Error</p>
-                      <p className="mt-1">{matchError}</p>
-                    </div>
-                  </div>
-                )}
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block px-1">
+                {t.nav.citizenTools}
+              </span>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  onClick={() => handleFeatureClick('/dashboard/schemes')}
+                  className="p-2 rounded-lg bg-slate-50 text-left text-xs font-medium text-foreground hover:bg-slate-100"
+                >
+                  {t.nav.schemes}
+                </button>
+                <button
+                  onClick={() => handleFeatureClick('/dashboard/vanibot')}
+                  className="p-2 rounded-lg bg-slate-50 text-left text-xs font-medium text-foreground hover:bg-slate-100"
+                >
+                  {t.nav.voiceAssistant}
+                </button>
+                <button
+                  onClick={() => handleFeatureClick('/dashboard/kagazcheck')}
+                  className="p-2 rounded-lg bg-slate-50 text-left text-xs font-medium text-foreground hover:bg-slate-100"
+                >
+                  {t.nav.documentCheck}
+                </button>
+                <button
+                  onClick={() => handleFeatureClick('/dashboard/parchaa')}
+                  className="p-2 rounded-lg bg-slate-50 text-left text-xs font-medium text-foreground hover:bg-slate-100"
+                >
+                  {t.nav.applicationForm}
+                </button>
+              </div>
+            </div>
 
-                {matching ? (
-                  <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center space-y-4 shadow-xs">
-                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
-                      <Sparkles className="h-6 w-6 animate-spin" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="font-bold text-base text-slate-900">
-                        Evaluating Eligibility Rules...
-                      </h3>
-                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                        Comparing your profile parameters against statutory central and state scheme guidelines.
-                      </p>
-                    </div>
-                  </div>
-                ) : matchResponse ? (
-                  <MatchResults
-                    matchData={matchResponse}
-                    onViewDetails={(s) => setSelectedScheme(s)}
-                    onEditProfile={() => {
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+            <div className="pt-2 border-t border-border flex items-center gap-2">
+              {user ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex-1 btn-primary-sleek h-9 text-xs font-bold text-center justify-center"
+                  >
+                    {t.nav.dashboard}
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setMobileMenuOpen(false);
                     }}
-                  />
-                ) : (
-                  <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-4 shadow-xs">
-                    <Search className="h-10 w-10 text-emerald-600 mx-auto" />
-                    <div className="space-y-1">
-                      <h3 className="font-bold text-base text-slate-900">
-                        Ready to Find Your Eligible Schemes
-                      </h3>
-                      <p className="text-xs text-slate-500 max-w-md mx-auto">
-                        Fill in your profile details on the left and tap "Find My Eligible Schemes"
-                        to view instant, deterministic rule breakdowns.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+                    className="btn-outline-sleek h-9 px-4 text-xs font-bold"
+                  >
+                    {t.nav.logout}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex-1 btn-outline-sleek h-9 text-xs font-bold text-center justify-center"
+                  >
+                    {t.nav.signIn}
+                  </Link>
+                  <Link
+                    href="/auth/signup"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex-1 btn-primary-sleek h-9 text-xs font-bold text-center justify-center"
+                  >
+                    {t.nav.register}
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         )}
+      </header>
 
-        {/* VIEW 3: EXPLORE ALL SCHEMES */}
-        {currentTab === 'explore' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-            <div className="text-left space-y-2 border-b border-slate-200 pb-6">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200">
-                <BookOpen className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Verified Schemes Repository</span>
+      {/* 2. MAIN LANDING CONTENT */}
+      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-12 sm:space-y-16">
+        {/* Showcase Hero Slider with Large Custom Illustrations */}
+        <section id="showcase" className="w-full">
+          <ShowcaseSlider
+            language={language}
+            onSelectAction={(tab) => {
+              if (tab === 'vanibot') handleFeatureClick('/dashboard/vanibot');
+              else if (tab === 'kagazcheck') handleFeatureClick('/dashboard/kagazcheck');
+              else if (tab === 'parchaa') handleFeatureClick('/dashboard/parchaa');
+              else if (tab === 'farm-map') handleFeatureClick('/dashboard/farm-map');
+              else if (tab === 'applications') handleFeatureClick('/dashboard/applications');
+              else handleFeatureClick('/dashboard/schemes');
+            }}
+          />
+        </section>
+
+        {/* 4 Key Platform Benchmarks */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-left">
+          <div className="p-4 sm:p-5 card-saas space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+              {t.benchmarks.accuracyTitle}
+            </span>
+            <p className="text-xl sm:text-3xl font-black text-foreground">{t.benchmarks.accuracyValue}</p>
+            <p className="text-xs text-muted-foreground">{t.benchmarks.accuracySub}</p>
+          </div>
+
+          <div className="p-4 sm:p-5 card-saas space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+              {t.benchmarks.advocacyTitle}
+            </span>
+            <p className="text-xl sm:text-3xl font-black text-primary">{t.benchmarks.advocacyValue}</p>
+            <p className="text-xs text-muted-foreground">{t.benchmarks.advocacySub}</p>
+          </div>
+
+          <div className="p-4 sm:p-5 card-saas space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+              {t.benchmarks.inclusionTitle}
+            </span>
+            <p className="text-xl sm:text-3xl font-black text-foreground">{t.benchmarks.inclusionValue}</p>
+            <p className="text-xs text-muted-foreground">{t.benchmarks.inclusionSub}</p>
+          </div>
+
+          <div className="p-4 sm:p-5 card-saas space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+              {t.benchmarks.speedTitle}
+            </span>
+            <p className="text-xl sm:text-3xl font-black text-foreground">{t.benchmarks.speedValue}</p>
+            <p className="text-xs text-muted-foreground">{t.benchmarks.speedSub}</p>
+          </div>
+        </section>
+
+        {/* Dedicated Kisan Chaupal Social Media Section */}
+        <div id="kisan-chaupal" className="w-full">
+          <KisanChaupalSection
+            language={language}
+            onJoinClick={() => handleFeatureClick('/dashboard')}
+          />
+        </div>
+
+        {/* Bridge Hero Showcase Section */}
+        <section className="p-6 sm:p-10 card-saas grid grid-cols-1 lg:grid-cols-12 gap-8 items-center border border-border">
+          <div className="lg:col-span-6 space-y-4 text-left">
+            <span className="badge-saas badge-saas-active">
+              {t.bridge.badge}
+            </span>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-foreground tracking-tight leading-tight">
+              {t.bridge.title}
+            </h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {t.bridge.description}
+            </p>
+            <div className="pt-2 flex flex-wrap gap-2">
+              <span className="px-3 py-1.5 rounded-lg bg-slate-50 text-xs font-semibold text-foreground border border-border">
+                ✓ {t.bridge.bullet1}
+              </span>
+              <span className="px-3 py-1.5 rounded-lg bg-slate-50 text-xs font-semibold text-foreground border border-border">
+                ✓ {t.bridge.bullet2}
+              </span>
+              <span className="px-3 py-1.5 rounded-lg bg-slate-50 text-xs font-semibold text-foreground border border-border">
+                ✓ {t.bridge.bullet3}
+              </span>
+            </div>
+          </div>
+
+          <div className="lg:col-span-6 flex items-center justify-center p-2">
+            <img
+              src="/bridge_illustration.png"
+              alt="GramSetu Bridge"
+              className="w-full max-h-80 lg:max-h-96 object-contain"
+            />
+          </div>
+        </section>
+
+        {/* DEDICATED PLATFORM SUITE SECTION */}
+        <section id="tools" className="w-full">
+          <FeatureExplorer
+            language={language}
+            onSelectAction={(route) => handleFeatureClick(route)}
+          />
+        </section>
+
+        {/* SECTION: 4-STEP STATUTORY WORKFLOW */}
+        <section id="how-it-works" className="p-5 sm:p-8 card-saas space-y-6 text-left">
+          <div className="border-b border-border pb-3">
+            <span className="badge-saas badge-saas-active">
+              {t.workflow.badge}
+            </span>
+            <h3 className="text-xl sm:text-2xl font-black text-foreground mt-1 tracking-tight">
+              {t.workflow.title}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {t.workflow.subtitle}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-xl bg-slate-50 border border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-primary font-mono">PHASE 01</span>
+                <span className="badge-saas badge-saas-neutral text-[8px]">PROFILE & GIS</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                Explore Government Schemes
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-600 max-w-2xl">
-                Browse official central and state welfare initiatives with statutory criteria,
-                benefit entitlements, and required application documents.
+              <h4 className="font-bold text-sm text-foreground">{t.workflow.phase1Title}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t.workflow.phase1Desc}
               </p>
             </div>
 
-            <PopularSchemes
-              schemes={schemes}
-              loading={loadingSchemes}
-              onViewDetails={(s) => setSelectedScheme(s)}
-              onCheckEligibility={() => {
-                setCurrentTab('find');
-                if (!matchResponse) handleRunMatch(profile);
-              }}
-            />
-          </div>
-        )}
+            <div className="p-4 rounded-xl bg-slate-50 border border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-primary font-mono">PHASE 02</span>
+                <span className="badge-saas badge-saas-neutral text-[8px]">RULES MATCH</span>
+              </div>
+              <h4 className="font-bold text-sm text-foreground">{t.workflow.phase2Title}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t.workflow.phase2Desc}
+              </p>
+            </div>
 
-        {/* VIEW 4: VANI-BOT MULTILINGUAL CONVERSATIONAL VOICE ENGINE */}
-        {currentTab === 'vanibot' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <VaniBot
-              citizenProfile={profile}
-              activeLanguage={language}
-              onOpenSchemeModal={(s) => {
-                if ('id' in s || 'scheme_id' in s) {
-                  const sId = 'id' in s ? (s as SchemeData).id : (s as any).scheme_id;
-                  const found = schemes.find((item) => item.id === sId);
-                  if (found) setSelectedScheme(found);
-                  else if ('scheme_name' in s) {
-                    setSelectedScheme(s as any);
-                  }
-                }
-              }}
-              onOpenKagazCheck={(sId) => handleOpenKagazCheck(sId)}
-              onOpenParchaa={(sId) => handleOpenParchaa(sId)}
-            />
-          </div>
-        )}
+            <div className="p-4 rounded-xl bg-slate-50 border border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-primary font-mono">PHASE 03</span>
+                <span className="badge-saas badge-saas-neutral text-[8px]">PAPER AUDIT</span>
+              </div>
+              <h4 className="font-bold text-sm text-foreground">{t.workflow.phase3Title}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t.workflow.phase3Desc}
+              </p>
+            </div>
 
-        {/* VIEW 5: KAGAZCHECK MULTIMODAL VISION DOCUMENT AUDITOR */}
-        {currentTab === 'kagazcheck' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <KagazCheckAuditor
-              initialScheme={targetKagazCheckScheme}
-              citizenProfile={profile}
-              availableSchemes={schemes}
-              onApplyForScheme={(sId) => {
-                const found = schemes.find((s) => s.id === sId);
-                if (found) handleStartApplication(found);
-                else setCurrentTab('applications');
-              }}
-              onGenerateParchaa={(sId) => handleOpenParchaa(sId)}
-            />
+            <div className="p-4 rounded-xl bg-slate-50 border border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-primary font-mono">PHASE 04</span>
+                <span className="badge-saas badge-saas-neutral text-[8px]">PRINT & SUBMIT</span>
+              </div>
+              <h4 className="font-bold text-sm text-foreground">{t.workflow.phase4Title}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t.workflow.phase4Desc}
+              </p>
+            </div>
           </div>
-        )}
+        </section>
 
-        {/* VIEW 6: PARCHAA GENERATOR ONE-CLICK DOSSIER */}
-        {currentTab === 'parchaa' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <ParchaaGenerator
-              initialScheme={targetParchaaScheme}
-              citizenProfile={profile}
-              availableSchemes={schemes}
-              language={language}
-              onExploreSchemes={() => setCurrentTab('explore')}
-              onOpenKagazCheck={(sId) => handleOpenKagazCheck(sId)}
-            />
+        {/* SECTION: CTA BANNER */}
+        <section className="p-6 sm:p-10 card-saas text-center space-y-5 bg-primary text-primary-foreground border-primary w-full shadow-md">
+          <div className="max-w-2xl mx-auto space-y-2.5">
+            <span className="badge-saas bg-white text-primary font-bold text-xs">
+              {t.cta.badge}
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight">
+              {t.cta.title}
+            </h2>
+            <p className="text-sm opacity-95 leading-relaxed">
+              {t.cta.subtitle}
+            </p>
           </div>
-        )}
 
-        {/* VIEW 7: MY PROFILE */}
-        {currentTab === 'profile' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <MyProfileView
-              profile={profile}
-              onSaveProfile={(newProf) => setProfile(newProf)}
-              onFindSchemes={(prof) => handleRunMatch(prof)}
-            />
+          <div className="pt-2 flex flex-wrap justify-center gap-3">
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="px-6 py-3 rounded-xl bg-white text-primary font-bold text-xs uppercase tracking-wider hover:opacity-90 transition shadow-lg w-full sm:w-auto text-center"
+              >
+                {t.cta.goToDashboard} →
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/auth/signup"
+                  className="px-6 py-3 rounded-xl bg-white text-primary font-bold text-xs uppercase tracking-wider hover:opacity-90 transition shadow-lg cursor-pointer w-full sm:w-auto text-center"
+                >
+                  {t.cta.createAccount}
+                </Link>
+                <Link
+                  href="/auth/login"
+                  className="px-6 py-3 rounded-xl bg-primary/20 border border-white/40 text-white font-bold text-xs uppercase tracking-wider hover:bg-primary/30 transition cursor-pointer w-full sm:w-auto text-center"
+                >
+                  {t.cta.signIn}
+                </Link>
+              </>
+            )}
           </div>
-        )}
-
-        {/* VIEW 8: MY APPLICATIONS */}
-        {currentTab === 'applications' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <MyApplicationsView
-              applications={applications}
-              onExploreSchemes={() => setCurrentTab('explore')}
-              onOpenKagazCheck={(sId) => handleOpenKagazCheck(sId)}
-              onGenerateParchaa={(sId) => handleOpenParchaa(sId)}
-            />
-          </div>
-        )}
+        </section>
       </main>
 
-      {/* Scheme Details Modal */}
-      <SchemeDetailsModal
-        scheme={selectedScheme}
-        onClose={() => setSelectedScheme(null)}
-        onStartApplication={handleStartApplication}
-        onAuditDocuments={(s) => handleOpenKagazCheck(s)}
-        onGenerateParchaa={(s) => handleOpenParchaa(s)}
+      {/* Footer */}
+      <Footer
+        language={language}
+        onTabChange={(tab) => handleFeatureClick(`/dashboard/${tab}`)}
       />
-
-
-      {/* Grounded AI Assistant Drawer */}
-      <AssistantPanel
-        isOpen={assistantOpen}
-        onClose={() => setAssistantOpen(false)}
-        citizenProfile={profile}
-      />
-
-      {/* Production Footer */}
-      <Footer onNavigateTab={(tab) => setCurrentTab(tab)} />
     </div>
   );
 }

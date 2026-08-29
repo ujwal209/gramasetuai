@@ -1,0 +1,265 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap');
+
+@layer base {
+  :root {
+    /* Pure Clean White System */
+    --brand-primary: #10b981;
+    --brand-accent: #059669;
+    --brand-glow: #34d399;
+
+    /* 100% Pure White Crisp Surfaces */
+    --background: 0 0% 100%; /* #ffffff pure white */
+    --foreground: 224 45% 12%; /* #111827 */
+
+    --card: 0 0% 100%; /* #ffffff pure white */
+    --card-foreground: 224 45% 12%;
+
+    --popover: 0 0% 100%; /* #ffffff pure white */
+    --popover-foreground: 224 45% 12%;
+
+    --primary: 160 84% 39%; /* #10b981 Emerald Green */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 18% 97%; /* #f8fafc */
+    --secondary-foreground: 224 45% 12%;
+
+    --muted: 220 18% 96%; /* #f1f5f9 */
+    --muted-foreground: 220 12% 46%; /* #64748b */
+
+    --accent: 160 84% 39%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 16% 92%; /* #e2e8f0 crisp solid */
+    --input: 220 16% 92%;
+    --ring: 160 84% 39%;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  /* Strict single font: Google Sans everywhere */
+  *, html, body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6, label, a, ul, li {
+    font-family: 'Google Sans', sans-serif !important;
+    font-optical-sizing: auto;
+    font-style: normal;
+    border-color: hsl(var(--border));
+  }
+
+  html, body {
+    background-color: #ffffff !important;
+    color: hsl(var(--foreground));
+    font-family: 'Google Sans', sans-serif !important;
+    font-optical-sizing: auto;
+    font-style: normal;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Sleek Solid Minimal Scrollbars */
+  html, body, *, ::before, ::after {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+/* 100% Solid Opaque Navbar */
+.navbar-solid {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* 100% Solid Opaque Dropdowns */
+.dropdown-solid {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 100% Solid Opaque Sidebar */
+.sidebar-solid {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+/* Solid Clean Card Surfaces */
+.card-saas {
+  background-color: #ffffff !important;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease-in-out;
+}
+
+.card-saas:hover {
+  border-color: hsl(var(--primary) / 0.4);
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Crisp SaaS Badges */
+.badge-saas {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.65rem;
+  line-height: 1;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.badge-saas-active {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.badge-saas-neutral {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.badge-saas-contrast {
+  background-color: hsl(var(--foreground));
+  color: #ffffff;
+  border: 1px solid hsl(var(--foreground));
+}
+
+/* Custom Sleek Inputs */
+.input-sleek {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 0.85rem;
+  background-color: #ffffff;
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  transition: all 0.15s ease;
+}
+
+.input-sleek:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.input-sleek::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Sleek Buttons */
+.btn-primary-sleek {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.5rem;
+  padding: 0 1.25rem;
+  background-color: hsl(var(--primary));
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 0.625rem;
+  border: 1px solid hsl(var(--primary));
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-primary-sleek:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.btn-primary-sleek:active {
+  transform: translateY(0);
+}
+
+.btn-primary-sleek:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-outline-sleek {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.5rem;
+  padding: 0 1.15rem;
+  background-color: #ffffff;
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.625rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-outline-sleek:hover {
+  border-color: hsl(var(--foreground) / 0.4);
+  background-color: hsl(var(--muted));
+}
+
+.btn-outline-sleek:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Animations */
+@keyframes sleekFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-sleek {
+  animation: sleekFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

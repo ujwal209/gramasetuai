@@ -21,7 +21,7 @@ class VaniService:
         return language_service.get_supported_languages()
 
     async def converse(self, req: VaniConverseRequest) -> VaniConverseResponse:
-        return conversation_service.converse(req)
+        return await conversation_service.converse(req)
 
     async def transcribe(
         self,
