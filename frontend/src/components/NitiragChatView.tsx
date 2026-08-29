@@ -55,6 +55,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
   const { language } = useLanguage();
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [conversations, setConversations] = useState<NitiragConversationRecord[]>([]);
   const [activeConv, setActiveConv] = useState<NitiragConversationRecord | null>(null);
@@ -255,6 +256,9 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
     if (!query || loadingTurn) return;
 
     setInputText('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setLoadingTurn(true);
 
     const tempUserMsg: ChatMessageRecord = {
@@ -295,8 +299,26 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 140)}px`;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (inputText.trim() && !loadingTurn) {
+        triggerChatWithQuery(inputText);
+      }
+    }
+  };
+
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!inputText.trim() || loadingTurn) return;
     triggerChatWithQuery(inputText);
   };
 
@@ -965,57 +987,100 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
           </div>
         )}
 
-        {/* 4. PINNED BOTTOM PROMPT BAR */}
-        <div className="p-2.5 sm:p-4 sm:px-8 pb-3 sm:pb-4 border-t border-slate-200/80 bg-white/95 backdrop-blur-md shrink-0 sticky bottom-0 z-20 shadow-[0_-4px_24px_rgba(0,0,0,0.04)]">
-          <div className="max-w-4xl mx-auto w-full space-y-1.5 sm:space-y-2">
-            <form onSubmit={handleSendMessage} className="relative flex items-center">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask legal question (e.g. PM-KUSUM 90% solar subsidy, RTC land mutation)..."
-                className="w-full h-11 sm:h-12 pl-3.5 sm:pl-4 pr-20 sm:pr-24 text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50/90 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition shadow-2xs"
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim() || loadingTurn}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 sm:h-9 px-3.5 sm:px-4 bg-slate-900 hover:bg-slate-800 active:scale-95 disabled:opacity-40 text-white text-xs font-bold rounded-lg sm:rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
-              >
-                <span>Send</span>
-                <span>→</span>
-              </button>
-            </form>
-
-            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono text-slate-400 px-1">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setEnableWebSearch(!enableWebSearch)}
-                  className={`px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
-                    enableWebSearch
-                      ? 'border-blue-500 bg-blue-50 text-blue-900 font-bold'
-                      : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                  </svg>
-                  <span>Web Search: {enableWebSearch ? 'ON' : 'OFF'}</span>
-                </button>
-
-                <Link
-                  href="/dashboard/nitirag/upload"
-                  className="px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border border-emerald-200 bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-                  title="Upload new government circular or scheme gazette PDF"
-                >
-                  <span>📄</span>
-                  <span>+ Upload PDF</span>
-                </Link>
+        {/* 4. MODERN FLOATING PROMPT ISLAND (ChatGPT / Claude Style) */}
+        <div className="p-3 sm:p-5 pt-2 sm:pt-3 shrink-0 sticky bottom-0 z-30 bg-gradient-to-t from-white via-white/95 to-transparent">
+          <div className="max-w-3xl mx-auto w-full space-y-2">
+            {/* The Floating Card Container */}
+            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/90 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:shadow-[0_12px_36px_rgb(0,0,0,0.09)] focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:shadow-[0_14px_40px_rgba(16,185,129,0.12)] transition-all duration-200 p-2.5 sm:p-3 space-y-2">
+              {/* Auto-growing Multiline Textarea */}
+              <div className="relative flex items-start">
+                <textarea
+                  ref={textareaRef}
+                  value={inputText}
+                  onChange={handleTextareaChange}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  placeholder="Ask statutory legal question (e.g. PM-KUSUM 90% solar subsidy eligibility, RTC land mutation, gazette criteria)..."
+                  className="w-full resize-none bg-transparent px-1.5 sm:px-2.5 py-1 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none leading-relaxed min-h-[38px] max-h-36 overflow-y-auto"
+                />
               </div>
 
-              <span className="hidden sm:inline text-slate-400">
-                GramSetu Niti RAG • Official Gazette Directives
-              </span>
+              {/* Action Toolbar Inside Island */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                {/* Left Shortcuts */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Web Search Toggle Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setEnableWebSearch(!enableWebSearch)}
+                    className={`h-7 sm:h-8 px-2 sm:px-2.5 rounded-xl text-[11px] font-semibold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer ${
+                      enableWebSearch
+                        ? 'bg-blue-50 text-blue-800 border border-blue-200 font-bold shadow-2xs'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/70'
+                    }`}
+                    title="Toggle Live Web Gazette Search"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                    <span>Web Search</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${enableWebSearch ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                  </button>
+
+                  {/* Upload PDF Pill */}
+                  <Link
+                    href="/dashboard/nitirag/upload"
+                    className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-xl text-[11px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-2xs"
+                    title="Upload statutory PDF gazette or scheme order"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <span>Upload PDF</span>
+                  </Link>
+
+                  {/* Document Scope Quick Tag */}
+                  <button
+                    type="button"
+                    onClick={() => setIsDocPickerOpen(!isDocPickerOpen)}
+                    className="hidden xs:flex sm:flex h-7 sm:h-8 px-2 rounded-xl text-[11px] font-medium text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200/70 transition items-center gap-1 cursor-pointer"
+                    title="Select Gazette Scope"
+                  >
+                    <span>📚</span>
+                    <span>{selectedCount > 0 ? `${selectedCount} Scoped` : 'All Gazettes'}</span>
+                  </button>
+                </div>
+
+                {/* Right: Circular Send Button */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleSendMessage}
+                    disabled={!inputText.trim() || loadingTurn}
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                      inputText.trim() && !loadingTurn
+                        ? 'bg-slate-900 hover:bg-emerald-600 active:scale-90 text-white cursor-pointer shadow-md'
+                        : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                    }`}
+                    title={loadingTurn ? 'Synthesizing...' : 'Send Prompt (Enter)'}
+                  >
+                    {loadingTurn ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Subtle Legal & Keyboard Shortcut Disclaimer */}
+            <div className="text-[10px] text-slate-400 text-center font-mono flex items-center justify-center gap-2">
+              <span>Grounded in verified National Gazettes</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="hidden sm:inline">Shift + Enter for new line</span>
             </div>
           </div>
         </div>
