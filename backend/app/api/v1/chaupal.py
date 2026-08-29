@@ -1748,9 +1748,19 @@ async def get_notifications(
         # Query follow states for all actors in the notifications list
         following_set = set()
         if actor_handles:
+            handle_list = list(actor_handles)
+            regex_list = [{"following_handle": {"$regex": f"^{re.escape(h)}$", "$options": "i"}} for h in handle_list]
             follow_cursor = db["chaupal_follows"].find({
-                "follower_handle": clean_username,
-                "following_handle": {"$in": list(actor_handles)}
+                "$and": [
+                    {"$or": [
+                        {"follower_handle": clean_username},
+                        {"follower_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+                    ]},
+                    {"$or": [
+                        {"following_handle": {"$in": handle_list}},
+                        *regex_list
+                    ]}
+                ]
             })
             async for f_doc in follow_cursor:
                 following_set.add(normalize_handle(f_doc.get("following_handle")))

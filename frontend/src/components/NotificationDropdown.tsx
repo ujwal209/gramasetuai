@@ -407,17 +407,21 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
                       (() => {
                         const actorKey = notif.actor_handle?.toLowerCase().replace(/^@/, '').trim() || '';
                         const isFollowingActor = followingMap[actorKey] ?? notif.is_following ?? false;
+                        if (isFollowingActor) {
+                          return (
+                            <span className="px-2.5 py-1 rounded-xl text-[11px] font-semibold text-slate-500 bg-slate-100/90 border border-slate-200/80 shrink-0 select-none flex items-center gap-1">
+                              <span>✓</span>
+                              <span>Following</span>
+                            </span>
+                          );
+                        }
                         return (
                           <button
                             type="button"
                             onClick={(e) => handleFollowToggle(e, notif.actor_handle, notif.actor_name)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-95 shadow-2xs ${
-                              isFollowingActor
-                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            }`}
+                            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all duration-150 cursor-pointer shadow-xs shrink-0"
                           >
-                            {isFollowingActor ? 'Following ✓' : 'Follow Back'}
+                            Follow Back
                           </button>
                         );
                       })()
