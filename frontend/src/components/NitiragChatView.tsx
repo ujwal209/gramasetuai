@@ -326,6 +326,27 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConv?.messages, loadingTurn]);
 
+  // Handle mobile virtual keyboard appearance cleanly without viewport jumping
+  useEffect(() => {
+    const handleViewportResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        window.scrollTo(0, 0);
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+      window.visualViewport.addEventListener('scroll', handleViewportResize);
+    }
+    return () => {
+      if (typeof window !== 'undefined' && window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportResize);
+        window.visualViewport.removeEventListener('scroll', handleViewportResize);
+      }
+    };
+  }, []);
+
   const selectedCount = activeConv?.selected_document_ids?.length || 0;
   const turnCount = activeConv?.messages ? Math.floor(activeConv.messages.length / 2) : 0;
   const isContextNearLimit = turnCount >= 6;
@@ -340,7 +361,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
     );
 
   return (
-    <div className="flex h-screen h-[100dvh] max-h-[100dvh] w-full bg-white text-slate-900 overflow-hidden text-left antialiased relative">
+    <div className="flex h-full w-full bg-white text-slate-900 overflow-hidden text-left antialiased relative">
       {/* Mobile Drawer Backdrop */}
       {isMobileSidebarOpen && (
         <div
@@ -988,10 +1009,10 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
         )}
 
         {/* 4. MODERN FLOATING PROMPT ISLAND (ChatGPT / Claude Style) */}
-        <div className="p-3 sm:p-5 pt-2 sm:pt-3 shrink-0 sticky bottom-0 z-30 bg-gradient-to-t from-white via-white/95 to-transparent">
-          <div className="max-w-3xl mx-auto w-full space-y-2">
+        <div className="p-2 sm:p-5 pt-1.5 sm:pt-3 pb-2 sm:pb-4 shrink-0 sticky bottom-0 z-30 bg-gradient-to-t from-white via-white/95 to-transparent">
+          <div className="max-w-3xl mx-auto w-full space-y-1.5 sm:space-y-2">
             {/* The Floating Card Container */}
-            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/90 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:shadow-[0_12px_36px_rgb(0,0,0,0.09)] focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:shadow-[0_14px_40px_rgba(16,185,129,0.12)] transition-all duration-200 p-2.5 sm:p-3 space-y-2">
+            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/90 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.06)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.09)] focus-within:border-emerald-500 focus-within:ring-2 sm:focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:shadow-[0_10px_35px_rgba(16,185,129,0.12)] transition-all duration-200 p-2 sm:p-3 space-y-2">
               {/* Auto-growing Multiline Textarea */}
               <div className="relative flex items-start">
                 <textarea
@@ -999,9 +1020,16 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                   value={inputText}
                   onChange={handleTextareaChange}
                   onKeyDown={handleKeyDown}
+                  onFocus={() => {
+                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                      setTimeout(() => {
+                        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                      }, 200);
+                    }
+                  }}
                   rows={1}
-                  placeholder="Ask statutory legal question (e.g. PM-KUSUM 90% solar subsidy eligibility, RTC land mutation, gazette criteria)..."
-                  className="w-full resize-none bg-transparent px-1.5 sm:px-2.5 py-1 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none leading-relaxed min-h-[38px] max-h-36 overflow-y-auto"
+                  placeholder="Ask statutory legal question (e.g. PM-KUSUM 90% solar subsidy, RTC land mutation)..."
+                  className="w-full resize-none bg-transparent px-1.5 sm:px-2.5 py-1 text-base sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none leading-relaxed min-h-[36px] max-h-28 sm:max-h-36 overflow-y-auto touch-manipulation"
                 />
               </div>
 

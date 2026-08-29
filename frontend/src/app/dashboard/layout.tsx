@@ -105,7 +105,7 @@ export default function DashboardLayout({
   const isFullscreenCanvas = isChatRoute || isMessagesRoute;
 
   return (
-    <div className={`bg-white text-foreground flex flex-col selection:bg-primary selection:text-primary-foreground ${isFullscreenCanvas ? 'h-screen h-[100dvh] max-h-[100dvh] overflow-hidden' : 'min-h-screen'}`}>
+    <div className={`bg-white text-foreground flex flex-col selection:bg-primary selection:text-primary-foreground ${isFullscreenCanvas ? 'h-[100dvh] max-h-[100dvh] overflow-hidden fixed inset-0' : 'min-h-screen'}`}>
       {/* Persistent Non-Scrollable Sidebar (Hidden on Fullscreen Chat) */}
       {!isChatRoute && (
         <DashboardSidebar
@@ -120,9 +120,9 @@ export default function DashboardLayout({
       <div
         className={`flex-1 min-h-0 flex flex-col transition-all duration-300 ease-in-out ${
           isChatRoute
-            ? 'w-full h-full h-[100dvh] max-h-[100dvh] overflow-hidden'
+            ? 'w-full h-full min-h-0 flex-1 overflow-hidden'
             : isMessagesRoute
-            ? `${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} h-full max-h-full h-screen h-[100dvh] overflow-hidden`
+            ? `${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} h-full max-h-full h-[100dvh] overflow-hidden`
             : `${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen`
         }`}
       >
