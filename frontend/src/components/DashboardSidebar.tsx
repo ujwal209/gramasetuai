@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { LanguageDropdown } from '@/components/LanguageDropdown';
 import { dashboardTranslations } from '@/lib/dashboardTranslations';
+import { getChaupalNotifications } from '@/services/api';
 
 interface DashboardSidebarProps {
   mobileOpen: boolean;
@@ -21,6 +22,7 @@ interface NavSection {
     href: string;
     label: string;
     icon: React.ReactNode;
+    badge?: number;
     sublinks?: Array<{ href: string; label: string }>;
   }>;
 }
@@ -35,6 +37,25 @@ export function DashboardSidebar({
   const router = useRouter();
   const { user, handleLogout } = useAuth();
   const { language, setLanguage } = useLanguage();
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUnread = async () => {
+      try {
+        const res = await getChaupalNotifications(user?.handle || 'citizen_farmer', 10);
+        if (isMounted && res && res.success) {
+          setUnreadCount(res.unread_count || 0);
+        }
+      } catch {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user?.handle]);
 
   const t = dashboardTranslations[language]?.sidebar || dashboardTranslations.en.sidebar;
 
@@ -123,6 +144,16 @@ export function DashboardSidebar({
     {
       title: 'Account',
       items: [
+        {
+          href: '/dashboard/notifications',
+          label: 'Notifications',
+          badge: unreadCount,
+          icon: (
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+            </svg>
+          ),
+        },
         {
           href: '/dashboard/profile',
           label: t.profile || 'Profile & Land Records',
@@ -254,17 +285,32 @@ export function DashboardSidebar({
                       onClick={onCloseMobile}
                       title={isCollapsed ? item.label : undefined}
                       className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition ${
-                        isCollapsed ? 'justify-center' : ''
+                        isCollapsed ? 'justify-center' : 'justify-between'
                       } ${
                         isActive
                           ? 'bg-slate-900 text-white font-semibold'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-normal'
                       }`}
                     >
-                      <span className={isActive ? 'text-white' : 'text-slate-500'}>
-                        {item.icon}
-                      </span>
-                      {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="relative">
+                          <span className={isActive ? 'text-white' : 'text-slate-500'}>
+                            {item.icon}
+                          </span>
+                          {isCollapsed && !!item.badge && item.badge > 0 && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500" />
+                          )}
+                        </div>
+                        {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      </div>
+
+                      {!isCollapsed && !!item.badge && item.badge > 0 && (
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                          isActive ? 'bg-rose-500 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}>
+                          {item.badge > 99 ? '99+' : item.badge}
+                        </span>
+                      )}
                     </Link>
 
                     {/* Sublinks */}

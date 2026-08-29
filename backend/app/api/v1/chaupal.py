@@ -100,15 +100,61 @@ async def ensure_official_gramsetu_content(db):
         logger.warning(f"Error checking official seed content: {e}")
 
 
+def get_frontend_base_url() -> str:
+    env_url = os.getenv("FRONTEND_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+    if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL:
+        return settings.FRONTEND_URL.rstrip("/")
+    return "https://gramsetu-ai.vercel.app"
+
+
+async def create_in_app_notification(
+    recipient_handle: str,
+    actor_handle: str,
+    actor_name: str,
+    actor_avatar: str = "/logo.png",
+    type: str = "activity",
+    text: str = "",
+    action_url: str = "/dashboard/chaupal"
+):
+    if not recipient_handle or recipient_handle == actor_handle or recipient_handle == "gramsetu_official":
+        return
+    try:
+        db = get_mongo_db()
+        if db is not None:
+            notif_doc = {
+                "id": f"notif_{uuid.uuid4().hex[:10]}",
+                "recipient_handle": recipient_handle,
+                "actor_handle": actor_handle,
+                "actor_name": actor_name,
+                "actor_avatar": actor_avatar or "/logo.png",
+                "type": type,
+                "text": text,
+                "action_url": action_url,
+                "is_read": False,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await db["chaupal_notifications"].insert_one(notif_doc)
+    except Exception as e:
+        logger.warning(f"Failed to create in-app notification: {e}")
+
+
 # Helper to dispatch background mail notification
 async def trigger_user_email_notification(
     recipient_handle: str,
     event_type: str,
     actor_name: str,
     body_text: str = "",
-    action_url: str = "http://localhost:3000/dashboard/chaupal"
+    action_url: Optional[str] = None
 ):
     try:
+        frontend_base = get_frontend_base_url()
+        if not action_url:
+            action_url = f"{frontend_base}/dashboard/chaupal"
+        elif action_url.startswith("http://localhost:3000"):
+            action_url = action_url.replace("http://localhost:3000", frontend_base)
+
         db = get_mongo_db()
         if db is None:
             return
@@ -306,12 +352,23 @@ async def reply_to_story(
                 await db["chaupal_direct_messages"].insert_one(msg_doc.copy())
 
                 background_tasks.add_task(
+                    create_in_app_notification,
+                    recipient_handle=recipient_handle,
+                    actor_handle=sender_handle,
+                    actor_name=sender_name,
+                    actor_avatar=sender_avatar,
+                    type="story_reply",
+                    text=f'Replied to your 24h story: "{text[:80]}"',
+                    action_url=f"/dashboard/chaupal/messages?user={sender_handle}"
+                )
+
+                background_tasks.add_task(
                     trigger_user_email_notification,
                     recipient_handle=recipient_handle,
                     event_type="message",
                     actor_name=sender_name,
                     body_text=f"Replied to your 24h story: \"{text}\"",
-                    action_url="http://localhost:3000/dashboard/chaupal/messages"
+                    action_url=f"{get_frontend_base_url()}/dashboard/chaupal/messages?user={sender_handle}"
                 )
 
                 return {"success": True, "message": "Reply sent to farmer directly", "chat_message": msg_doc}
@@ -576,12 +633,23 @@ async def toggle_like(
                     author_handle = post.get("author", {}).get("username")
                     if author_handle and author_handle != user_id and author_handle != "gramsetu_official":
                         background_tasks.add_task(
+                            create_in_app_notification,
+                            recipient_handle=author_handle,
+                            actor_handle=user_id,
+                            actor_name=actor_name,
+                            actor_avatar=payload.get("avatar_url", "/logo.png"),
+                            type="like",
+                            text=f'liked your post: "{post.get("caption", "")[:60]}"',
+                            action_url=f"/dashboard/chaupal/post/{post_id}"
+                        )
+
+                        background_tasks.add_task(
                             trigger_user_email_notification,
                             recipient_handle=author_handle,
                             event_type="like",
                             actor_name=actor_name,
                             body_text=f"Liked your post: \"{post.get('caption', '')[:80]}...\"",
-                            action_url=f"http://localhost:3000/dashboard/chaupal/post/{post_id}"
+                            action_url=f"{get_frontend_base_url()}/dashboard/chaupal/post/{post_id}"
                         )
 
                 new_count = len(likes)
@@ -611,6 +679,7 @@ async def add_comment(
     reply_to_username = payload.get("reply_to_username")
     sender_name = payload.get("name", "Citizen Farmer")
     sender_handle = payload.get("username", "citizen_farmer")
+    sender_avatar = payload.get("avatar_url", "/logo.png")
 
     comment = {
         "id": f"c_{uuid.uuid4().hex[:8]}",
@@ -618,7 +687,7 @@ async def add_comment(
         "reply_to_username": reply_to_username,
         "username": sender_handle,
         "name": sender_name,
-        "avatar_url": payload.get("avatar_url", "/logo.png"),
+        "avatar_url": sender_avatar,
         "text": text,
         "created_at": datetime.utcnow().isoformat()
     }
@@ -635,12 +704,23 @@ async def add_comment(
             recipient_handle = reply_to_username if reply_to_username else (post.get("author", {}).get("username") if post else None)
             if recipient_handle and recipient_handle != sender_handle and recipient_handle != "gramsetu_official":
                 background_tasks.add_task(
+                    create_in_app_notification,
+                    recipient_handle=recipient_handle,
+                    actor_handle=sender_handle,
+                    actor_name=sender_name,
+                    actor_avatar=sender_avatar,
+                    type="comment",
+                    text=f'commented: "{text[:70]}"',
+                    action_url=f"/dashboard/chaupal/post/{post_id}"
+                )
+
+                background_tasks.add_task(
                     trigger_user_email_notification,
                     recipient_handle=recipient_handle,
                     event_type="comment",
                     actor_name=sender_name,
                     body_text=f"\"{text}\"",
-                    action_url=f"http://localhost:3000/dashboard/chaupal/post/{post_id}"
+                    action_url=f"{get_frontend_base_url()}/dashboard/chaupal/post/{post_id}"
                 )
         except Exception as e:
             logger.warning(f"Error adding comment to MongoDB: {e}")
@@ -845,12 +925,23 @@ async def send_direct_message(
 
             if other_handle != sender_handle:
                 background_tasks.add_task(
+                    create_in_app_notification,
+                    recipient_handle=other_handle,
+                    actor_handle=sender_handle,
+                    actor_name=sender_name,
+                    actor_avatar=sender_avatar,
+                    type="message",
+                    text=f'"{display_text[:80]}"',
+                    action_url=f"/dashboard/chaupal/messages?user={sender_handle}"
+                )
+
+                background_tasks.add_task(
                     trigger_user_email_notification,
                     recipient_handle=other_handle,
                     event_type="message",
                     actor_name=sender_name,
                     body_text=f"\"{display_text}\"",
-                    action_url="http://localhost:3000/dashboard/chaupal/messages"
+                    action_url=f"{get_frontend_base_url()}/dashboard/chaupal/messages?user={sender_handle}"
                 )
         except Exception as e:
             logger.warning(f"Error inserting direct message: {e}")
@@ -1317,12 +1408,23 @@ async def toggle_follow(
 
                 if username != current_user and username != "gramsetu_official":
                     background_tasks.add_task(
+                        create_in_app_notification,
+                        recipient_handle=username,
+                        actor_handle=current_user,
+                        actor_name=actor_name,
+                        actor_avatar=payload.get("avatar_url", "/logo.png"),
+                        type="follow",
+                        text="started following your farm updates & harvests",
+                        action_url=f"/dashboard/chaupal/profile/{current_user}"
+                    )
+
+                    background_tasks.add_task(
                         trigger_user_email_notification,
                         recipient_handle=username,
                         event_type="follow",
                         actor_name=actor_name,
                         body_text="Started following your updates on Kisan Chaupal.",
-                        action_url=f"http://localhost:3000/dashboard/chaupal/profile/{current_user}"
+                        action_url=f"{get_frontend_base_url()}/dashboard/chaupal/profile/{current_user}"
                     )
 
             new_followers_count = await db["chaupal_follows"].count_documents({"following_handle": username})
@@ -1505,3 +1607,97 @@ async def get_suggested_users(current_user: str = Query("citizen_farmer")):
             logger.warning(f"Error querying users for suggestions: {e}")
 
     return {"success": True, "suggestions": suggestions}
+
+
+# -------------------------------------------------------------
+# 7. IN-APP NOTIFICATIONS SYSTEM
+# -------------------------------------------------------------
+
+@router.get("/notifications", summary="Get user in-app notifications with unread count")
+async def get_notifications(
+    username: str = Query("citizen_farmer"),
+    limit: int = Query(30)
+):
+    db = get_mongo_db()
+    notifs = []
+    unread_count = 0
+
+    if db is not None:
+        try:
+            cursor = db["chaupal_notifications"].find(
+                {"$or": [{"recipient_handle": username}, {"recipient_handle": "all"}]}
+            ).sort("created_at", -1).limit(limit)
+
+            async for doc in cursor:
+                doc["_id"] = str(doc["_id"])
+                if not doc.get("is_read"):
+                    unread_count += 1
+                notifs.append(doc)
+        except Exception as e:
+            logger.warning(f"Error fetching in-app notifications: {e}")
+
+    # If empty, return a welcoming seed notification
+    if not notifs:
+        notifs = [
+            {
+                "id": "notif_welcome",
+                "recipient_handle": username,
+                "actor_handle": "gramsetu_official",
+                "actor_name": "GramSetu Community",
+                "actor_avatar": "/logo.png",
+                "type": "welcome",
+                "text": "Welcome to Kisan Chaupal! Connect with fellow farmers, ask legal guidance, and trade crops directly.",
+                "action_url": "/dashboard/chaupal",
+                "is_read": True,
+                "created_at": datetime.utcnow().isoformat()
+            }
+        ]
+
+    return {
+        "success": True,
+        "count": len(notifs),
+        "unread_count": unread_count,
+        "notifications": notifs
+    }
+
+
+@router.post("/notifications/read", summary="Mark notifications as read")
+async def mark_notifications_read(payload: Dict[str, Any] = Body(...)):
+    username = payload.get("username", "citizen_farmer")
+    notification_id = payload.get("notification_id")
+    db = get_mongo_db()
+
+    if db is not None:
+        try:
+            if notification_id:
+                res = await db["chaupal_notifications"].update_one(
+                    {"id": notification_id},
+                    {"$set": {"is_read": True}}
+                )
+                return {"success": True, "marked": res.modified_count}
+            else:
+                res = await db["chaupal_notifications"].update_many(
+                    {"recipient_handle": username, "is_read": False},
+                    {"$set": {"is_read": True}}
+                )
+                return {"success": True, "marked": res.modified_count}
+        except Exception as e:
+            logger.warning(f"Error marking notifications as read: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    return {"success": True, "marked": 0}
+
+
+@router.delete("/notifications/{notification_id}", summary="Delete single notification")
+async def delete_notification(notification_id: str):
+    db = get_mongo_db()
+    if db is not None:
+        try:
+            res = await db["chaupal_notifications"].delete_one({"id": notification_id})
+            if res.deleted_count > 0:
+                return {"success": True, "message": "Notification removed", "id": notification_id}
+        except Exception as e:
+            logger.warning(f"Error deleting notification: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    return {"success": True}

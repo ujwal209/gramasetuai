@@ -1,13 +1,33 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { getChaupalNotifications } from '@/services/api';
 
 export function ChaupalBottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUnread = async () => {
+      try {
+        const res = await getChaupalNotifications(user?.handle || 'citizen_farmer', 10);
+        if (isMounted && res && res.success) {
+          setUnreadCount(res.unread_count || 0);
+        }
+      } catch {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user?.handle]);
 
   const navItems = [
     {
@@ -53,18 +73,26 @@ export function ChaupalBottomNav() {
       ),
     },
     {
-      href: '/dashboard/chaupal/marketplace',
-      label: 'Market',
+      href: '/dashboard/notifications',
+      label: 'Alerts',
+      badge: unreadCount,
       icon: (isActive: boolean) => (
-        <svg
-          className={`w-6 h-6 transition ${isActive ? 'text-slate-900 stroke-[2.5]' : 'text-slate-500 hover:text-slate-800'}`}
-          fill={isActive ? 'currentColor' : 'none'}
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={isActive ? 0 : 2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-        </svg>
+        <div className="relative">
+          <svg
+            className={`w-6 h-6 transition ${isActive ? 'text-slate-900 stroke-[2.5]' : 'text-slate-500 hover:text-slate-800'}`}
+            fill={isActive ? 'currentColor' : 'none'}
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={isActive ? 0 : 2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+          </svg>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </div>
       ),
     },
     {
@@ -100,7 +128,7 @@ export function ChaupalBottomNav() {
   ];
 
   return (
-    <nav aria-label="Kisan Chaupal Navigation" className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-2 px-6 shadow-lg flex items-center justify-around max-w-lg mx-auto sm:rounded-t-2xl sm:bottom-2 sm:border sm:border-slate-200">
+    <nav aria-label="Kisan Chaupal Navigation" className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-2 px-4 shadow-lg flex items-center justify-around max-w-lg mx-auto sm:rounded-t-2xl sm:bottom-2 sm:border sm:border-slate-200">
       {navItems.map((item) => {
         const isActive =
           item.href === '/dashboard/chaupal'
@@ -111,7 +139,7 @@ export function ChaupalBottomNav() {
           <Link
             key={item.label}
             href={item.href}
-            className="flex flex-col items-center justify-center p-1.5 min-w-[54px] cursor-pointer"
+            className="flex flex-col items-center justify-center p-1 min-w-[48px] cursor-pointer"
           >
             {item.icon(isActive)}
             {!item.isCreate && (

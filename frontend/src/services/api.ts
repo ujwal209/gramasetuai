@@ -2613,6 +2613,59 @@ export async function calculateLandParcel(
   return res.data;
 }
 
+export interface ChaupalNotification {
+  id: string;
+  recipient_handle: string;
+  actor_handle: string;
+  actor_name: string;
+  actor_avatar: string;
+  type: 'follow' | 'message' | 'like' | 'comment' | 'story_reply' | 'marketplace' | string;
+  text: string;
+  action_url: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+/**
+ * Get user in-app notifications with unread badge count
+ */
+export async function getChaupalNotifications(username: string = 'citizen_farmer', limit: number = 30): Promise<{
+  success: boolean;
+  count: number;
+  unread_count: number;
+  notifications: ChaupalNotification[];
+}> {
+  const res = await apiClient.get<{
+    success: boolean;
+    count: number;
+    unread_count: number;
+    notifications: ChaupalNotification[];
+  }>('/api/v1/chaupal/notifications', { params: { username, limit } });
+  return res.data;
+}
+
+/**
+ * Mark in-app notifications as read
+ */
+export async function markChaupalNotificationsRead(username: string = 'citizen_farmer', notificationId?: string): Promise<{
+  success: boolean;
+  marked: number;
+}> {
+  const res = await apiClient.post<{ success: boolean; marked: number }>('/api/v1/chaupal/notifications/read', {
+    username,
+    notification_id: notificationId
+  });
+  return res.data;
+}
+
+/**
+ * Delete a single in-app notification
+ */
+export async function deleteChaupalNotification(notificationId: string): Promise<{ success: boolean; message?: string }> {
+  const res = await apiClient.delete<{ success: boolean; message?: string }>(`/api/v1/chaupal/notifications/${notificationId}`);
+  return res.data;
+}
+
 export { API_BASE_URL };
 
 

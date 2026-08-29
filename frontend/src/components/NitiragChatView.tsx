@@ -319,12 +319,10 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
 
       {/* 1. DEDICATED LEFT CHAT SIDEBAR */}
       <aside
-        className={`w-72 sm:w-80 border-r border-slate-200 bg-white flex flex-col justify-between shrink-0 transition-all duration-200 z-50 md:z-10 ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:w-0 md:border-r-0 md:overflow-hidden'
+        className={`fixed inset-y-0 left-0 z-50 w-72 sm:w-80 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-200 ease-in-out md:static md:z-10 md:transition-all ${
+          isMobileSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
         } ${
-          isMobileSidebarOpen
-            ? 'fixed inset-y-0 left-0 translate-x-0 bg-white shadow-2xl'
-            : 'fixed md:static inset-y-0 left-0'
+          isSidebarOpen ? 'md:w-72 sm:md:w-80' : 'md:w-0 md:border-r-0 md:overflow-hidden'
         }`}
       >
         {/* Top: New Consultation Button & Search */}
@@ -505,8 +503,8 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
       {/* 2. MAIN CHAT VIEWPORT */}
       <section className="flex-1 flex flex-col justify-between bg-white overflow-hidden relative min-h-0 h-full">
         {/* Modern Minimalist Top Header Navbar */}
-        <header className="h-13 sm:h-14 px-2.5 sm:px-6 border-b border-slate-100 bg-white flex items-center justify-between gap-2 shrink-0 z-20">
-          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+        <header className="h-13 sm:h-14 px-2.5 sm:px-6 border-b border-slate-100 bg-white flex items-center justify-between gap-1.5 sm:gap-2 shrink-0 z-20">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
             {/* Sidebar Toggle */}
             <button
               type="button"
@@ -523,6 +521,17 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
+            </button>
+
+            {/* + New Chat Quick Button for Mobile */}
+            <button
+              type="button"
+              onClick={() => handleCreateNewChat()}
+              className="md:hidden px-2 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 shadow-2xs cursor-pointer"
+              title="New Consultation"
+            >
+              <span>+</span>
+              <span>New</span>
             </button>
 
             {/* Back to Dashboard */}
@@ -573,7 +582,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                   {selectedCount > 0 ? `Scoped (${selectedCount})` : 'All Gazettes'}
                 </span>
                 <span className="sm:hidden text-[11px]">
-                  {selectedCount > 0 ? `${selectedCount} Docs` : 'All Docs'}
+                  {selectedCount > 0 ? `${selectedCount} Docs` : 'Scope'}
                 </span>
                 <svg className="w-2.5 h-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -582,7 +591,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
 
               {/* Scoping Dropdown */}
               {isDocPickerOpen && (
-                <div className="absolute right-0 top-full mt-1.5 z-50 w-72 sm:w-80 p-2.5 rounded-2xl bg-white border border-slate-200 shadow-xl space-y-1.5 animate-sleek max-h-64 overflow-y-auto">
+                <div className="absolute right-0 top-full mt-1.5 z-50 w-72 sm:w-80 max-w-[calc(100vw-24px)] p-2.5 rounded-2xl bg-white border border-slate-200 shadow-xl space-y-1.5 animate-sleek max-h-64 overflow-y-auto">
                   <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 px-1">
                     <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">
                       Filter Gazette Scope

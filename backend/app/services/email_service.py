@@ -239,15 +239,25 @@ class EmailService:
         event_type: str,
         actor_name: str,
         body_text: str = "",
-        action_url: str = "http://localhost:3000/dashboard/chaupal"
+        action_url: Optional[str] = None
     ) -> bool:
         """
-        Asynchronously sends social activity notification email (Like, Comment, DM, Marketplace).
+        Asynchronously sends social activity notification email (Follow, Like, Comment, DM, Marketplace).
         """
         if not to_email:
             return False
 
-        if event_type == "like":
+        frontend_base = os.getenv("FRONTEND_URL", "https://gramsetu-ai.vercel.app").rstrip("/")
+        if not action_url:
+            action_url = f"{frontend_base}/dashboard/chaupal"
+        elif action_url.startswith("http://localhost:3000"):
+            action_url = action_url.replace("http://localhost:3000", frontend_base)
+
+        if event_type == "follow":
+            subject = f"{actor_name} started following you on Kisan Chaupal"
+            headline = f"<strong>{actor_name}</strong> is now following your farming updates and harvests."
+            action_label = "View Profile"
+        elif event_type == "like":
             subject = f"{actor_name} liked your post on Kisan Chaupal"
             headline = f"<strong>{actor_name}</strong> just liked your post on Kisan Chaupal."
             action_label = "View Post"
