@@ -682,7 +682,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
         {/* 3. CENTER VIEWPORT */}
         {isFreshConversation ? (
           /* RESPONSIVE SCROLLABLE NEW CHAT VIEWPORT */
-          <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 bg-white min-h-0">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 bg-white min-h-0 overscroll-contain scroll-smooth">
             <div className="max-w-3xl mx-auto w-full text-center space-y-6 animate-sleek my-auto">
               {/* Brand Header */}
               <div className="space-y-3">
@@ -741,7 +741,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
           </div>
         ) : (
           /* ACTIVE MESSAGE STREAM */
-          <div className="flex-1 overflow-y-auto px-3 sm:px-8 lg:px-12 py-4 sm:py-6 space-y-6 overscroll-contain min-h-0 bg-white">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-8 lg:px-12 py-4 sm:py-6 space-y-6 overscroll-contain min-h-0 bg-white scroll-smooth">
             <div className="max-w-4xl mx-auto w-full space-y-6 sm:space-y-8">
               {loadingSession ? (
                 <div className="p-12 text-center text-xs text-slate-400 space-y-2">
@@ -965,8 +965,8 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
           </div>
         )}
 
-        {/* 4. PINNED BOTTOM INPUT BAR */}
-        <div className="p-2.5 sm:p-4 sm:px-8 pb-3 sm:pb-5 border-t border-slate-100 bg-white shrink-0 z-20">
+        {/* 4. PINNED BOTTOM PROMPT BAR */}
+        <div className="p-2.5 sm:p-4 sm:px-8 pb-3 sm:pb-4 border-t border-slate-200/80 bg-white/95 backdrop-blur-md shrink-0 sticky bottom-0 z-20 shadow-[0_-4px_24px_rgba(0,0,0,0.04)]">
           <div className="max-w-4xl mx-auto w-full space-y-1.5 sm:space-y-2">
             <form onSubmit={handleSendMessage} className="relative flex items-center">
               <input
@@ -974,12 +974,12 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Ask legal question (e.g. PM-KUSUM 90% solar subsidy, RTC land mutation)..."
-                className="w-full h-11 sm:h-12 pl-3 sm:pl-4 pr-20 sm:pr-24 text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50/70 text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-500 transition shadow-2xs"
+                className="w-full h-11 sm:h-12 pl-3.5 sm:pl-4 pr-20 sm:pr-24 text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50/90 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition shadow-2xs"
               />
               <button
                 type="submit"
                 disabled={!inputText.trim() || loadingTurn}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 sm:h-9 px-3 sm:px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold rounded-lg sm:rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 sm:h-9 px-3.5 sm:px-4 bg-slate-900 hover:bg-slate-800 active:scale-95 disabled:opacity-40 text-white text-xs font-bold rounded-lg sm:rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
               >
                 <span>Send</span>
                 <span>→</span>
@@ -993,7 +993,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                   onClick={() => setEnableWebSearch(!enableWebSearch)}
                   className={`px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
                     enableWebSearch
-                      ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      ? 'border-blue-500 bg-blue-50 text-blue-900 font-bold'
                       : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
                   }`}
                 >
@@ -1005,7 +1005,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
 
                 <Link
                   href="/dashboard/nitirag/upload"
-                  className="px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100 text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                  className="px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border border-emerald-200 bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
                   title="Upload new government circular or scheme gazette PDF"
                 >
                   <span>📄</span>
@@ -1013,7 +1013,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                 </Link>
               </div>
 
-              <span className="hidden sm:inline">
+              <span className="hidden sm:inline text-slate-400">
                 GramSetu Niti RAG • Official Gazette Directives
               </span>
             </div>

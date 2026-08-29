@@ -120,7 +120,7 @@ export default function DashboardLayout({
       <div
         className={`flex-1 min-h-0 flex flex-col transition-all duration-300 ease-in-out ${
           isChatRoute
-            ? 'w-full h-screen min-h-screen overflow-hidden'
+            ? 'w-full h-full h-[100dvh] max-h-[100dvh] overflow-hidden'
             : isMessagesRoute
             ? `${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} h-full max-h-full h-screen h-[100dvh] overflow-hidden`
             : `${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} min-h-screen`
