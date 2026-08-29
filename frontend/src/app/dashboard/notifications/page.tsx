@@ -11,6 +11,18 @@ import {
   toggleChaupalFollow,
   type ChaupalNotification,
 } from '@/services/api';
+import {
+  Bell,
+  UserPlus,
+  MessageCircle,
+  Heart,
+  Sparkles,
+  CheckCheck,
+  Trash2,
+  ArrowRight,
+  Filter,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -22,10 +34,6 @@ export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'messages' | 'follows' | 'activity'>('all');
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
 
-  // Dispatch preferences state
-  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
-  const [smsEnabled, setSmsEnabled] = useState(true);
-
   useEffect(() => {
     loadNotifications();
   }, [user?.handle]);
@@ -33,7 +41,7 @@ export default function NotificationsPage() {
   const loadNotifications = async () => {
     setIsLoading(true);
     try {
-      const res = await getChaupalNotifications(user?.handle || 'citizen_farmer');
+      const res = await getChaupalNotifications(user?.handle || 'citizen_farmer', 50);
       if (res && res.success) {
         setNotifications(res.notifications || []);
         setUnreadCount(res.unread_count || 0);
@@ -50,8 +58,10 @@ export default function NotificationsPage() {
       await markChaupalNotificationsRead(user?.handle || 'citizen_farmer');
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
+      toast.success('All activity marked as read');
     } catch (err) {
       console.error('Error marking read:', err);
+      toast.error('Failed to mark all read');
     }
   };
 
@@ -77,23 +87,30 @@ export default function NotificationsPage() {
     try {
       await deleteChaupalNotification(notifId);
       setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+      toast.success('Notification removed');
     } catch (err) {
       console.error('Error deleting notification:', err);
+      toast.error('Failed to remove notification');
     }
   };
 
   const handleFollowBack = async (e: React.MouseEvent, handle: string) => {
     e.stopPropagation();
+    const willFollow = !followingMap[handle];
+    setFollowingMap((prev) => ({ ...prev, [handle]: willFollow }));
     try {
       const res = await toggleChaupalFollow(handle, {
         username: user?.handle || 'citizen_farmer',
         name: user?.name || 'Citizen Farmer',
+        avatar_url: user?.avatar_url || '/logo.png',
       });
       if (res && res.success) {
         setFollowingMap((prev) => ({ ...prev, [handle]: res.following }));
+        toast.success(res.following ? `Now following @${handle}` : `Unfollowed @${handle}`);
       }
     } catch (err) {
-      console.error('Error toggling follow:', err);
+      setFollowingMap((prev) => ({ ...prev, [handle]: !willFollow }));
+      toast.error('Failed to update follow');
     }
   };
 
@@ -120,139 +137,158 @@ export default function NotificationsPage() {
     }
   };
 
-  const getNotificationIcon = (type: string) => {
+  const getBadgeIcon = (type: string) => {
     switch (type) {
       case 'follow':
-        return <span className="p-1.5 rounded-full bg-blue-100 text-blue-700 text-xs">👥</span>;
+        return (
+          <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
+            <UserPlus className="w-3 h-3" />
+          </span>
+        );
       case 'message':
       case 'story_reply':
-        return <span className="p-1.5 rounded-full bg-emerald-100 text-emerald-700 text-xs">💬</span>;
+        return (
+          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+            <MessageCircle className="w-3 h-3" />
+          </span>
+        );
       case 'like':
-        return <span className="p-1.5 rounded-full bg-rose-100 text-rose-700 text-xs">❤️</span>;
-      case 'comment':
-        return <span className="p-1.5 rounded-full bg-amber-100 text-amber-700 text-xs">💭</span>;
-      case 'marketplace':
-        return <span className="p-1.5 rounded-full bg-purple-100 text-purple-700 text-xs">🌾</span>;
+        return (
+          <span className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-xs">
+            <Heart className="w-3 h-3 fill-current" />
+          </span>
+        );
       default:
-        return <span className="p-1.5 rounded-full bg-slate-100 text-slate-700 text-xs">🔔</span>;
+        return (
+          <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-xs">
+            <Sparkles className="w-3 h-3" />
+          </span>
+        );
     }
   };
 
   return (
-    <div className="space-y-6 text-left animate-sleek max-w-5xl mx-auto pb-16">
-      {/* 1. HEADER BANNER */}
-      <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-xs flex flex-col md:flex-row items-center justify-between gap-5">
-        <div className="space-y-2 max-w-xl">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold font-mono uppercase">
-              NOTIFICATIONS &amp; DIRECT ALERTS
-            </span>
+    <div className="space-y-6 text-left max-w-4xl mx-auto pb-24 animate-in fade-in duration-200">
+      {/* 1. Header Bar */}
+      <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              Activity &amp; Notifications
+            </h1>
             {unreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
-                {unreadCount} Unread
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold">
+                {unreadCount} new
               </span>
             )}
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            Citizen Notification Center
-          </h1>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Real-time notifications for direct messages, new farmer followers, crop discussions, and statutory dispatch alerts.
+          <p className="text-xs text-slate-500">
+            Real-time updates on followers, direct messages, crop queries, and discussions.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2.5 shrink-0">
           {unreadCount > 0 && (
             <button
               type="button"
               onClick={handleMarkAllRead}
-              className="h-10 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="h-10 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
-              <span>✓ Mark All Read</span>
+              <CheckCheck className="w-4 h-4 text-emerald-600" />
+              <span>Mark all as read</span>
             </button>
           )}
+
           <Link
             href="/dashboard/chaupal/messages"
-            className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
-            <span>Open Inbox →</span>
+            <span>Direct Messages</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       </div>
 
-      {/* 2. TABS & FILTER */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2 overflow-x-auto gap-2">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('all')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'all'
-                ? 'bg-slate-900 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            All ({notifications.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('unread')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'unread'
-                ? 'bg-slate-900 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Unread ({unreadCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('messages')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'messages'
-                ? 'bg-slate-900 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            💬 Messages
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('follows')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'follows'
-                ? 'bg-slate-900 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            👥 Followers
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('activity')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'activity'
-                ? 'bg-slate-900 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            ❤️ Likes &amp; Comments
-          </button>
-        </div>
+      {/* 2. Filter Navigation Pills */}
+      <div className="flex items-center gap-1.5 p-1 bg-slate-100/70 rounded-2xl w-fit max-w-full overflow-x-auto border border-slate-200/60">
+        <button
+          type="button"
+          onClick={() => setActiveTab('all')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer shrink-0 ${
+            activeTab === 'all'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          All ({notifications.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('unread')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer shrink-0 ${
+            activeTab === 'unread'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Unread ({unreadCount})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('follows')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer shrink-0 ${
+            activeTab === 'follows'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Followers
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('messages')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer shrink-0 ${
+            activeTab === 'messages'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Messages
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('activity')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer shrink-0 ${
+            activeTab === 'activity'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Likes &amp; Comments
+        </button>
       </div>
 
-      {/* 3. LIVE NOTIFICATIONS LIST */}
-      <div className="space-y-2.5">
+      {/* 3. Stream List */}
+      <div className="space-y-2">
         {isLoading ? (
-          <div className="p-16 rounded-2xl border border-slate-200 bg-white text-center space-y-3 shadow-xs">
-            <div className="w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs text-slate-500 font-mono">Syncing notifications...</p>
+          <div className="p-16 rounded-3xl border border-slate-200 bg-white text-center space-y-3 shadow-xs">
+            <div className="w-7 h-7 border-2 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-xs text-slate-500 font-mono">Syncing activity feed...</p>
           </div>
         ) : filteredNotifications.length === 0 ? (
-          <div className="p-12 rounded-2xl border border-slate-200 bg-white text-center space-y-2 shadow-xs">
-            <h3 className="text-sm font-bold text-slate-900">No Notifications</h3>
-            <p className="text-xs text-slate-500">
-              {activeTab === 'unread' ? 'You are all caught up!' : 'No activity under this filter.'}
+          <div className="p-14 rounded-3xl border border-slate-200 bg-white text-center space-y-2 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-lg">
+              <Bell className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900">No activity yet</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              {activeTab === 'unread'
+                ? "You're all caught up! No unread notifications at the moment."
+                : 'When other farmers connect or interact with your updates, you will see notifications here.'}
             </p>
           </div>
         ) : (
@@ -260,14 +296,14 @@ export default function NotificationsPage() {
             <div
               key={notif.id}
               onClick={() => handleNotificationClick(notif)}
-              className={`p-4 rounded-2xl border transition cursor-pointer flex items-start justify-between gap-3.5 group shadow-2xs ${
+              className={`p-4 sm:p-5 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center justify-between gap-4 group shadow-2xs ${
                 notif.is_read
                   ? 'bg-white border-slate-200/80 hover:bg-slate-50/70 text-slate-800'
-                  : 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50/70 text-slate-900'
+                  : 'bg-emerald-500/[0.04] border-emerald-300/60 hover:bg-emerald-500/[0.07] text-slate-900 ring-1 ring-emerald-500/10'
               }`}
             >
-              <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                {/* Actor Avatar with Type Badge */}
+              <div className="flex items-center gap-4 min-w-0 flex-1">
+                {/* Actor Avatar with Action Badge */}
                 <div className="relative shrink-0">
                   <img
                     src={notif.actor_avatar || '/logo.png'}
@@ -275,160 +311,92 @@ export default function NotificationsPage() {
                     onError={(e) => {
                       e.currentTarget.src = '/logo.png';
                     }}
-                    className="w-11 h-11 rounded-full object-cover border border-slate-200 bg-white"
+                    className="w-12 h-12 rounded-full object-cover ring-1 ring-slate-200 bg-white shadow-2xs"
                   />
                   <div className="absolute -bottom-1 -right-1">
-                    {getNotificationIcon(notif.type)}
+                    {getBadgeIcon(notif.type)}
                   </div>
                 </div>
 
-                {/* Content */}
-                <div className="space-y-1 min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition">
-                      {notif.actor_name}
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-mono">
+                {/* Content Details */}
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm text-slate-800 leading-snug break-words">
+                    <span className="font-bold text-slate-900 group-hover:text-emerald-700 transition">
                       @{notif.actor_handle}
-                    </span>
-                    {!notif.is_read && (
-                      <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                    )}
-                  </div>
-
-                  {/* Message snippet or event text */}
-                  <p className="text-xs text-slate-700 leading-relaxed break-words">
-                    {notif.type === 'message' ? (
+                    </span>{' '}
+                    {notif.type === 'follow' ? (
+                      <span className="text-slate-600">started following your farm updates &amp; harvests.</span>
+                    ) : notif.type === 'message' ? (
                       <span>
-                        <span className="font-semibold text-slate-900">sent you a direct message: </span>
-                        <span className="italic text-slate-600 font-serif">{notif.text}</span>
+                        <span className="text-slate-600">sent you a direct message: </span>
+                        <span className="italic text-slate-900 font-medium font-sans">"{notif.text}"</span>
                       </span>
                     ) : notif.type === 'story_reply' ? (
                       <span>
-                        <span className="font-semibold text-slate-900">replied to your story: </span>
-                        <span className="italic text-slate-600 font-serif">{notif.text}</span>
+                        <span className="text-slate-600">replied to your 24h story: </span>
+                        <span className="italic text-slate-900 font-medium font-sans">"{notif.text}"</span>
                       </span>
+                    ) : notif.type === 'like' ? (
+                      <span className="text-slate-600">liked your post.</span>
                     ) : (
-                      <span>{notif.text}</span>
+                      <span className="text-slate-600">{notif.text}</span>
                     )}
                   </p>
 
-                  <span className="text-[10px] text-slate-400 font-mono block">
-                    {getTimeAgo(notif.created_at)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {getTimeAgo(notif.created_at)}
+                    </span>
+                    {!notif.is_read && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                        New
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0 pt-1">
+              {/* Action Buttons (IG Style) */}
+              <div className="flex items-center gap-2 shrink-0">
                 {notif.type === 'follow' && (
                   <button
                     type="button"
                     onClick={(e) => handleFollowBack(e, notif.actor_handle)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-95 shadow-2xs ${
                       followingMap[notif.actor_handle]
-                        ? 'bg-slate-100 text-slate-700'
-                        : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white'
                     }`}
                   >
-                    {followingMap[notif.actor_handle] ? 'Following ✓' : 'Follow Back +'}
+                    {followingMap[notif.actor_handle] ? 'Following ✓' : 'Follow Back'}
                   </button>
                 )}
 
-                {notif.type === 'message' && (
+                {(notif.type === 'message' || notif.type === 'story_reply') && (
                   <button
                     type="button"
-                    onClick={() => router.push(`/dashboard/chaupal/messages?user=${notif.actor_handle}`)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition cursor-pointer shadow-2xs hidden sm:inline-block"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/dashboard/chaupal/messages?user=${notif.actor_handle}`);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all duration-150 cursor-pointer shadow-2xs active:scale-95"
                   >
-                    Reply →
+                    Reply
                   </button>
                 )}
 
                 <button
                   type="button"
                   onClick={(e) => handleDeleteNotification(e, notif.id)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                  className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                   title="Remove Notification"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
           ))
         )}
-      </div>
-
-      {/* 4. MULTI-CHANNEL DISPATCH PREFERENCES */}
-      <div className="pt-4 space-y-4">
-        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono px-1">
-          Automated Broadcast Channels
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* WhatsApp Channel */}
-          <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold text-sm">
-                  WA
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">WhatsApp Official Bot</h4>
-                  <p className="text-[11px] text-slate-500">{user?.phone || '+91 98765 43210'}</p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setWhatsappEnabled(!whatsappEnabled)}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold transition cursor-pointer ${
-                  whatsappEnabled
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {whatsappEnabled ? '✓ CONNECTED' : 'DISABLED'}
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Directly receive digital PDFs of Parchaa receipts and DBT subsidy confirmation alerts via official WhatsApp bot.
-            </p>
-          </div>
-
-          {/* SMS Dispatcher Channel */}
-          <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-800 flex items-center justify-center font-bold text-sm">
-                  SMS
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Govt NIC-SMS Gateway</h4>
-                  <p className="text-[11px] text-slate-500">Statutory SMS alerts</p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSmsEnabled(!smsEnabled)}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold transition cursor-pointer ${
-                  smsEnabled
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {smsEnabled ? '✓ ACTIVE' : 'DISABLED'}
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Standard text alerts in your regional language for DBT subsidy approvals and application stage progression.
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );

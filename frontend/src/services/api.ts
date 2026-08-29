@@ -2428,8 +2428,22 @@ export async function getChaupalExploreFeed(params?: {
 /**
  * Toggle follow farmer
  */
-export async function toggleChaupalFollow(username: string, userId: string = 'current_user'): Promise<{ success: boolean; following: boolean; followers_count: number; message: string }> {
-  const res = await apiClient.post<{ success: boolean; following: boolean; followers_count: number; message: string }>(`/api/v1/chaupal/profile/${username}/follow`, { user_id: userId, username: userId });
+export async function toggleChaupalFollow(
+  username: string,
+  payloadOrUserId: string | { user_id?: string; username?: string; name?: string; avatar_url?: string } = 'current_user'
+): Promise<{ success: boolean; following: boolean; followers_count: number; message: string }> {
+  const body = typeof payloadOrUserId === 'string'
+    ? { user_id: payloadOrUserId, username: payloadOrUserId }
+    : {
+        user_id: payloadOrUserId.user_id || payloadOrUserId.username || 'current_user',
+        username: payloadOrUserId.username || payloadOrUserId.user_id || 'current_user',
+        name: payloadOrUserId.name,
+        avatar_url: payloadOrUserId.avatar_url,
+      };
+  const res = await apiClient.post<{ success: boolean; following: boolean; followers_count: number; message: string }>(
+    `/api/v1/chaupal/profile/${username}/follow`,
+    body
+  );
   return res.data;
 }
 
