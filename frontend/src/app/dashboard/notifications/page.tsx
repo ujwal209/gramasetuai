@@ -43,10 +43,20 @@ export default function NotificationsPage() {
     try {
       const res = await getChaupalNotifications(user?.handle || 'citizen_farmer', 50);
       if (res && res.success) {
-        setNotifications(res.notifications || []);
+        const notifs = res.notifications || [];
+        setNotifications(notifs);
         setUnreadCount(res.unread_count || 0);
+
+        const initialFollowMap: Record<string, boolean> = {};
+        notifs.forEach((n) => {
+          if (n.actor_handle && typeof n.is_following === 'boolean') {
+            const h = n.actor_handle.toLowerCase().replace(/^@/, '').trim();
+            initialFollowMap[h] = n.is_following;
+          }
+        });
+        setFollowingMap((prev) => ({ ...initialFollowMap, ...prev }));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Error loading notifications:', err);
     } finally {
       setIsLoading(false);
@@ -59,9 +69,9 @@ export default function NotificationsPage() {
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
       toast.success('All activity marked as read');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error marking read:', err);
-      toast.error('Failed to mark all read');
+      toast.error(err?.response?.data?.detail || 'Failed to mark all read');
     }
   };
 
@@ -88,14 +98,15 @@ export default function NotificationsPage() {
       await deleteChaupalNotification(notifId);
       setNotifications((prev) => prev.filter((n) => n.id !== notifId));
       toast.success('Notification removed');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error deleting notification:', err);
-      toast.error('Failed to remove notification');
+      toast.error(err?.response?.data?.detail || 'Failed to remove notification');
     }
   };
 
-  const handleFollowBack = async (e: React.MouseEvent, handle: string) => {
+  const handleFollowBack = async (e: React.MouseEvent, rawHandle: string) => {
     e.stopPropagation();
+    const handle = rawHandle.toLowerCase().replace(/^@/, '').trim();
     const willFollow = !followingMap[handle];
     setFollowingMap((prev) => ({ ...prev, [handle]: willFollow }));
     try {
@@ -106,11 +117,12 @@ export default function NotificationsPage() {
       });
       if (res && res.success) {
         setFollowingMap((prev) => ({ ...prev, [handle]: res.following }));
-        toast.success(res.following ? `Now following @${handle}` : `Unfollowed @${handle}`);
+        toast.success(res.message || (res.following ? `Now following @${handle}` : `Unfollowed @${handle}`));
       }
-    } catch (err) {
+    } catch (err: any) {
       setFollowingMap((prev) => ({ ...prev, [handle]: !willFollow }));
-      toast.error('Failed to update follow');
+      const errorMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Failed to update follow';
+      toast.error(errorMsg);
     }
   };
 
@@ -359,17 +371,23 @@ export default function NotificationsPage() {
               {/* Action Buttons (IG Style) */}
               <div className="flex items-center gap-2 shrink-0">
                 {notif.type === 'follow' && (
-                  <button
-                    type="button"
-                    onClick={(e) => handleFollowBack(e, notif.actor_handle)}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-95 shadow-2xs ${
-                      followingMap[notif.actor_handle]
-                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                        : 'bg-slate-900 hover:bg-slate-800 text-white'
-                    }`}
-                  >
-                    {followingMap[notif.actor_handle] ? 'Following ✓' : 'Follow Back'}
-                  </button>
+                  (() => {
+                    const actorKey = notif.actor_handle?.toLowerCase().replace(/^@/, '').trim() || '';
+                    const isFollowingActor = followingMap[actorKey] ?? notif.is_following ?? false;
+                    return (
+                      <button
+                        type="button"
+                        onClick={(e) => handleFollowBack(e, notif.actor_handle)}
+                        className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-95 shadow-2xs ${
+                          isFollowingActor
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        }`}
+                      >
+                        {isFollowingActor ? 'Following ✓' : 'Follow Back'}
+                      </button>
+                    );
+                  })()
                 )}
 
                 {(notif.type === 'message' || notif.type === 'story_reply') && (

@@ -46,8 +46,18 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
     try {
       const res = await getChaupalNotifications(user?.handle || 'citizen_farmer', 30);
       if (res && res.success) {
-        setNotifications(res.notifications || []);
+        const notifs = res.notifications || [];
+        setNotifications(notifs);
         setUnreadCount(res.unread_count || 0);
+
+        const initialFollowMap: Record<string, boolean> = {};
+        notifs.forEach((n) => {
+          if (n.actor_handle && typeof n.is_following === 'boolean') {
+            const h = n.actor_handle.toLowerCase().replace(/^@/, '').trim();
+            initialFollowMap[h] = n.is_following;
+          }
+        });
+        setFollowingMap((prev) => ({ ...initialFollowMap, ...prev }));
       }
     } catch (err) {
       console.warn('Error fetching notifications:', err);
@@ -90,8 +100,9 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
       toast.success('All notifications marked as read');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to mark all read:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to mark notifications read');
     }
   };
 
@@ -113,9 +124,10 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
     }
   };
 
-  const handleFollowToggle = async (e: React.MouseEvent, handle: string, name: string) => {
+  const handleFollowToggle = async (e: React.MouseEvent, rawHandle: string, name: string) => {
     e.stopPropagation();
     e.preventDefault();
+    const handle = rawHandle.toLowerCase().replace(/^@/, '').trim();
     const willFollow = !followingMap[handle];
     setFollowingMap((prev) => ({ ...prev, [handle]: willFollow }));
 
@@ -127,11 +139,12 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
       });
       if (res && res.success) {
         setFollowingMap((prev) => ({ ...prev, [handle]: res.following }));
-        toast.success(res.following ? `Following @${handle}` : `Unfollowed @${handle}`);
+        toast.success(res.message || (res.following ? `Now following @${handle}` : `Unfollowed @${handle}`));
       }
-    } catch (err) {
+    } catch (err: any) {
       setFollowingMap((prev) => ({ ...prev, [handle]: !willFollow }));
-      toast.error('Failed to update follow');
+      const errorMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Failed to update follow';
+      toast.error(errorMsg);
     }
   };
 
@@ -389,21 +402,25 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
                     </div>
                   </div>
 
-                  {/* Right: IG-style Actions */}
-                  <div className="flex items-center gap-1.5 shrink-0">
                     {/* Follow Back Button (IG Style) */}
                     {notif.type === 'follow' && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleFollowToggle(e, notif.actor_handle, notif.actor_name)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-95 shadow-2xs ${
-                          followingMap[notif.actor_handle]
-                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                            : 'bg-slate-900 hover:bg-slate-800 text-white'
-                        }`}
-                      >
-                        {followingMap[notif.actor_handle] ? 'Following' : 'Follow Back'}
-                      </button>
+                      (() => {
+                        const actorKey = notif.actor_handle?.toLowerCase().replace(/^@/, '').trim() || '';
+                        const isFollowingActor = followingMap[actorKey] ?? notif.is_following ?? false;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => handleFollowToggle(e, notif.actor_handle, notif.actor_name)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-95 shadow-2xs ${
+                              isFollowingActor
+                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            }`}
+                          >
+                            {isFollowingActor ? 'Following ✓' : 'Follow Back'}
+                          </button>
+                        );
+                      })()
                     )}
 
                     {/* Reply to DM Button */}

@@ -15,6 +15,7 @@ import {
 } from '@/services/api';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { ChaupalBottomNav } from '@/components/ChaupalBottomNav';
+import { toast } from 'sonner';
 
 export default function FarmerSocialProfilePage() {
   const params = useParams();
@@ -80,13 +81,20 @@ export default function FarmerSocialProfilePage() {
   const handleFollowToggle = async () => {
     if (!profile) return;
     try {
-      const res = await toggleChaupalFollow(profile.username, currentHandle);
+      const res = await toggleChaupalFollow(profile.username, {
+        username: currentHandle,
+        name: user?.name || 'Citizen Farmer',
+        avatar_url: user?.avatar_url || '/logo.png',
+      });
       if (res && res.success) {
         setIsFollowing(res.following);
         setFollowersCount(res.followers_count);
+        toast.success(res.message || (res.following ? `Now following @${profile.username}` : `Unfollowed @${profile.username}`));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Follow toggle error:', err);
+      const errorMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Failed to update follow status';
+      toast.error(errorMsg);
     }
   };
 
@@ -111,16 +119,25 @@ export default function FarmerSocialProfilePage() {
 
   const handleToggleFollowInList = async (targetUsername: string) => {
     try {
-      const res = await toggleChaupalFollow(targetUsername, currentHandle);
+      const res = await toggleChaupalFollow(targetUsername, {
+        username: currentHandle,
+        name: user?.name || 'Citizen Farmer',
+        avatar_url: user?.avatar_url || '/logo.png',
+      });
       if (res && res.success) {
         setFollowListUsers((prev) =>
           prev.map((u) =>
-            u.username === targetUsername ? { ...u, is_following: res.following } : u
+            u.username.toLowerCase().replace(/^@/, '') === targetUsername.toLowerCase().replace(/^@/, '')
+              ? { ...u, is_following: res.following }
+              : u
           )
         );
+        toast.success(res.message || (res.following ? `Now following @${targetUsername}` : `Unfollowed @${targetUsername}`));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Toggle follow in list error:', err);
+      const errorMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Failed to update follow';
+      toast.error(errorMsg);
     }
   };
 

@@ -2155,8 +2155,16 @@ export async function deleteChaupalMarketplaceItem(itemId: string): Promise<{ su
 /**
  * Get farmer social media profile & stats
  */
-export async function getChaupalFarmerProfile(username: string): Promise<{ success: boolean; profile: ChaupalFarmerProfile }> {
-  const res = await apiClient.get<{ success: boolean; profile: ChaupalFarmerProfile }>(`/api/v1/chaupal/profile/${username}`);
+export async function getChaupalFarmerProfile(
+  username: string,
+  currentUser: string = 'citizen_farmer'
+): Promise<{ success: boolean; profile: ChaupalFarmerProfile }> {
+  const cleanUsername = username.replace(/^@/, '').trim();
+  const cleanCurrentUser = currentUser.replace(/^@/, '').trim();
+  const res = await apiClient.get<{ success: boolean; profile: ChaupalFarmerProfile }>(
+    `/api/v1/chaupal/profile/${cleanUsername}`,
+    { params: { current_user: cleanCurrentUser } }
+  );
   return res.data;
 }
 
@@ -2430,18 +2438,23 @@ export async function getChaupalExploreFeed(params?: {
  */
 export async function toggleChaupalFollow(
   username: string,
-  payloadOrUserId: string | { user_id?: string; username?: string; name?: string; avatar_url?: string } = 'current_user'
+  payloadOrUserId: string | { user_id?: string; username?: string; name?: string; avatar_url?: string } = 'citizen_farmer'
 ): Promise<{ success: boolean; following: boolean; followers_count: number; message: string }> {
-  const body = typeof payloadOrUserId === 'string'
-    ? { user_id: payloadOrUserId, username: payloadOrUserId }
-    : {
-        user_id: payloadOrUserId.user_id || payloadOrUserId.username || 'current_user',
-        username: payloadOrUserId.username || payloadOrUserId.user_id || 'current_user',
-        name: payloadOrUserId.name,
-        avatar_url: payloadOrUserId.avatar_url,
-      };
+  const cleanUsername = username.replace(/^@/, '').trim();
+  const body =
+    typeof payloadOrUserId === 'string'
+      ? {
+          user_id: payloadOrUserId.replace(/^@/, '').trim(),
+          username: payloadOrUserId.replace(/^@/, '').trim(),
+        }
+      : {
+          user_id: (payloadOrUserId.user_id || payloadOrUserId.username || 'citizen_farmer').replace(/^@/, '').trim(),
+          username: (payloadOrUserId.username || payloadOrUserId.user_id || 'citizen_farmer').replace(/^@/, '').trim(),
+          name: payloadOrUserId.name,
+          avatar_url: payloadOrUserId.avatar_url,
+        };
   const res = await apiClient.post<{ success: boolean; following: boolean; followers_count: number; message: string }>(
-    `/api/v1/chaupal/profile/${username}/follow`,
+    `/api/v1/chaupal/profile/${cleanUsername}/follow`,
     body
   );
   return res.data;
@@ -2481,9 +2494,11 @@ export async function getChaupalFollowers(username: string, currentUser: string 
   count: number;
   followers: ChaupalFollowUser[];
 }> {
+  const cleanUsername = username.replace(/^@/, '').trim();
+  const cleanCurrentUser = currentUser.replace(/^@/, '').trim();
   const res = await apiClient.get<{ success: boolean; count: number; followers: ChaupalFollowUser[] }>(
-    `/api/v1/chaupal/profile/${username}/followers`,
-    { params: { current_user: currentUser } }
+    `/api/v1/chaupal/profile/${cleanUsername}/followers`,
+    { params: { current_user: cleanCurrentUser } }
   );
   return res.data;
 }
@@ -2496,9 +2511,11 @@ export async function getChaupalFollowing(username: string, currentUser: string 
   count: number;
   following: ChaupalFollowUser[];
 }> {
+  const cleanUsername = username.replace(/^@/, '').trim();
+  const cleanCurrentUser = currentUser.replace(/^@/, '').trim();
   const res = await apiClient.get<{ success: boolean; count: number; following: ChaupalFollowUser[] }>(
-    `/api/v1/chaupal/profile/${username}/following`,
-    { params: { current_user: currentUser } }
+    `/api/v1/chaupal/profile/${cleanUsername}/following`,
+    { params: { current_user: cleanCurrentUser } }
   );
   return res.data;
 }
@@ -2637,6 +2654,7 @@ export interface ChaupalNotification {
   text: string;
   action_url: string;
   is_read: boolean;
+  is_following?: boolean;
   created_at: string;
 }
 

@@ -102,6 +102,13 @@ async def ensure_official_gramsetu_content(db):
         logger.warning(f"Error checking official seed content: {e}")
 
 
+def normalize_handle(handle: Optional[str]) -> str:
+    if not handle:
+        return "citizen_farmer"
+    cleaned = str(handle).strip().lstrip("@").lower()
+    return cleaned if cleaned else "citizen_farmer"
+
+
 def get_frontend_base_url() -> str:
     env_url = os.getenv("FRONTEND_URL", "").strip()
     if env_url:
@@ -120,15 +127,17 @@ async def create_in_app_notification(
     text: str = "",
     action_url: str = "/dashboard/chaupal"
 ):
-    if not recipient_handle or recipient_handle == actor_handle or recipient_handle == "gramsetu_official":
+    clean_recipient = normalize_handle(recipient_handle)
+    clean_actor = normalize_handle(actor_handle)
+    if not clean_recipient or clean_recipient == clean_actor or clean_recipient in ("gramsetu_official", "gramsetu_gov"):
         return
     try:
         db = get_mongo_db()
         if db is not None:
             notif_doc = {
                 "id": f"notif_{uuid.uuid4().hex[:10]}",
-                "recipient_handle": recipient_handle,
-                "actor_handle": actor_handle,
+                "recipient_handle": clean_recipient,
+                "actor_handle": clean_actor,
                 "actor_name": actor_name,
                 "actor_avatar": actor_avatar or "/logo.png",
                 "type": type,
@@ -139,7 +148,7 @@ async def create_in_app_notification(
             }
             await db["chaupal_notifications"].insert_one(notif_doc)
     except Exception as e:
-        logger.warning(f"Failed to create in-app notification: {e}")
+        logger.error(f"Error recording in-app notification: {e}", exc_info=True)
 
 
 # Helper to dispatch background mail notification
@@ -1250,6 +1259,9 @@ async def delete_marketplace_item(item_id: str):
 
 @router.get("/profile/{username}", summary="Get farmer profile with real followers count")
 async def get_farmer_profile(username: str, current_user: str = Query("citizen_farmer")):
+    clean_username = normalize_handle(username)
+    clean_current_user = normalize_handle(current_user)
+
     db = get_mongo_db()
     user_doc = None
     posts = []
@@ -1258,27 +1270,65 @@ async def get_farmer_profile(username: str, current_user: str = Query("citizen_f
     following_count = 0
     is_following = False
 
-    if db is not None:
-        try:
-            user_doc = await db["users"].find_one({"$or": [{"handle": username}, {"username": username}]})
-            cursor_p = db["chaupal_posts"].find({"author.username": username}).sort("created_at", -1)
-            async for doc in cursor_p:
-                doc["_id"] = str(doc["_id"])
-                posts.append(doc)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection is currently unavailable")
 
-            cursor_m = db["chaupal_marketplace"].find({"seller.username": username}).sort("created_at", -1)
-            async for doc in cursor_m:
-                doc["_id"] = str(doc["_id"])
-                market_items.append(doc)
+    try:
+        user_doc = await db["users"].find_one({
+            "$or": [
+                {"handle": clean_username},
+                {"username": clean_username},
+                {"handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}},
+                {"username": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+            ]
+        })
+        cursor_p = db["chaupal_posts"].find({
+            "$or": [
+                {"author.username": clean_username},
+                {"author.username": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+            ]
+        }).sort("created_at", -1)
+        async for doc in cursor_p:
+            doc["_id"] = str(doc["_id"])
+            posts.append(doc)
 
-            # Real follow counts in MongoDB
-            followers_count = await db["chaupal_follows"].count_documents({"following_handle": username})
-            following_count = await db["chaupal_follows"].count_documents({"follower_handle": username})
-            is_following = await db["chaupal_follows"].find_one({"follower_handle": current_user, "following_handle": username}) is not None
-        except Exception as e:
-            logger.warning(f"Error getting profile from MongoDB: {e}")
+        cursor_m = db["chaupal_marketplace"].find({
+            "$or": [
+                {"seller.username": clean_username},
+                {"seller.username": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+            ]
+        }).sort("created_at", -1)
+        async for doc in cursor_m:
+            doc["_id"] = str(doc["_id"])
+            market_items.append(doc)
 
-    name = username.replace("_", " ").title()
+        # Real follow counts in MongoDB
+        followers_count = await db["chaupal_follows"].count_documents({
+            "$or": [
+                {"following_handle": clean_username},
+                {"following_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+            ]
+        })
+        following_count = await db["chaupal_follows"].count_documents({
+            "$or": [
+                {"follower_handle": clean_username},
+                {"follower_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+            ]
+        })
+        is_following_doc = await db["chaupal_follows"].find_one({
+            "$and": [
+                {"$or": [{"follower_handle": clean_current_user}, {"follower_handle": {"$regex": f"^{re.escape(clean_current_user)}$", "$options": "i"}}]},
+                {"$or": [{"following_handle": clean_username}, {"following_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}]}
+            ]
+        })
+        is_following = is_following_doc is not None
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting profile from MongoDB for {clean_username}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve profile: {str(e)}")
+
+    name = clean_username.replace("_", " ").title()
     village = "Karnataka, India"
     avatar_url = "/logo.png"
     banner_url = "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=1200&auto=format&fit=crop&q=80"
@@ -1289,7 +1339,7 @@ async def get_farmer_profile(username: str, current_user: str = Query("citizen_f
     is_official = False
     is_verified = True
 
-    if username == "gramsetu_official":
+    if clean_username in ("gramsetu_official", "gramsetu_gov"):
         name = "GramSetu Official"
         village = "National Civic Network"
         avatar_url = "/logo.png"
@@ -1310,7 +1360,7 @@ async def get_farmer_profile(username: str, current_user: str = Query("citizen_f
     return {
         "success": True,
         "profile": {
-            "username": username,
+            "username": clean_username,
             "name": name,
             "avatar_url": avatar_url,
             "banner_url": banner_url,
@@ -1335,7 +1385,7 @@ async def get_farmer_profile(username: str, current_user: str = Query("citizen_f
 
 @router.put("/profile/me", summary="Update my farmer profile (bio, avatar, name, village)")
 async def update_my_profile(payload: Dict[str, Any] = Body(...)):
-    user_handle = payload.get("username", "citizen_farmer")
+    user_handle = normalize_handle(payload.get("username", "citizen_farmer"))
     db = get_mongo_db()
 
     updates = {}
@@ -1352,26 +1402,34 @@ async def update_my_profile(payload: Dict[str, Any] = Body(...)):
     if "primary_crops" in payload:
         updates["primary_crops"] = payload["primary_crops"]
 
-    if db is not None:
-        try:
-            await db["users"].update_one(
-                {"$or": [{"handle": user_handle}, {"username": user_handle}]},
-                {"$set": updates},
-                upsert=True
-            )
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection is unavailable")
 
-            # Update author snapshot on recent posts
-            if "name" in updates or "avatar_url" in updates or "village" in updates:
-                author_updates = {}
-                if "name" in updates: author_updates["author.name"] = updates["name"]
-                if "avatar_url" in updates: author_updates["author.avatar_url"] = updates["avatar_url"]
-                if "village" in updates: author_updates["author.village"] = updates["village"]
-                await db["chaupal_posts"].update_many(
-                    {"author.username": user_handle},
-                    {"$set": author_updates}
-                )
-        except Exception as e:
-            logger.warning(f"Error updating user profile in MongoDB: {e}")
+    try:
+        await db["users"].update_one(
+            {"$or": [
+                {"handle": user_handle},
+                {"username": user_handle},
+                {"handle": {"$regex": f"^{re.escape(user_handle)}$", "$options": "i"}},
+                {"username": {"$regex": f"^{re.escape(user_handle)}$", "$options": "i"}}
+            ]},
+            {"$set": updates},
+            upsert=True
+        )
+
+        # Update author snapshot on recent posts
+        if "name" in updates or "avatar_url" in updates or "village" in updates:
+            author_updates = {}
+            if "name" in updates: author_updates["author.name"] = updates["name"]
+            if "avatar_url" in updates: author_updates["author.avatar_url"] = updates["avatar_url"]
+            if "village" in updates: author_updates["author.village"] = updates["village"]
+            await db["chaupal_posts"].update_many(
+                {"author.username": user_handle},
+                {"$set": author_updates}
+            )
+    except Exception as e:
+        logger.error(f"Error updating user profile in MongoDB: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
 
     return {"success": True, "message": "Profile updated successfully", "updates": updates}
 
@@ -1382,90 +1440,116 @@ async def toggle_follow(
     background_tasks: BackgroundTasks,
     payload: Dict[str, Any] = Body(...)
 ):
-    current_user = payload.get("user_id", payload.get("username", "citizen_farmer"))
-    actor_name = payload.get("name", current_user)
+    clean_target = normalize_handle(username)
+    clean_current = normalize_handle(payload.get("user_id", payload.get("username", "citizen_farmer")))
+    actor_name = payload.get("name") or clean_current.replace("_", " ").title()
+
+    if clean_target == clean_current:
+        raise HTTPException(status_code=400, detail="You cannot follow your own profile.")
+
     db = get_mongo_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection is currently unavailable.")
 
     following = False
     new_followers_count = 0
 
-    if db is not None:
-        try:
-            existing = await db["chaupal_follows"].find_one({
-                "follower_handle": current_user,
-                "following_handle": username
+    try:
+        existing = await db["chaupal_follows"].find_one({
+            "$and": [
+                {"$or": [{"follower_handle": clean_current}, {"follower_handle": {"$regex": f"^{re.escape(clean_current)}$", "$options": "i"}}]},
+                {"$or": [{"following_handle": clean_target}, {"following_handle": {"$regex": f"^{re.escape(clean_target)}$", "$options": "i"}}]}
+            ]
+        })
+
+        if existing:
+            await db["chaupal_follows"].delete_one({"_id": existing["_id"]})
+            following = False
+        else:
+            await db["chaupal_follows"].insert_one({
+                "id": f"f_{uuid.uuid4().hex[:8]}",
+                "follower_handle": clean_current,
+                "following_handle": clean_target,
+                "created_at": datetime.utcnow().isoformat()
             })
+            following = True
 
-            if existing:
-                await db["chaupal_follows"].delete_one({"_id": existing["_id"]})
-                following = False
-            else:
-                await db["chaupal_follows"].insert_one({
-                    "id": f"f_{uuid.uuid4().hex[:8]}",
-                    "follower_handle": current_user,
-                    "following_handle": username,
-                    "created_at": datetime.utcnow().isoformat()
-                })
-                following = True
+            if clean_target != clean_current and clean_target not in ("gramsetu_official", "gramsetu_gov"):
+                background_tasks.add_task(
+                    create_in_app_notification,
+                    recipient_handle=clean_target,
+                    actor_handle=clean_current,
+                    actor_name=actor_name,
+                    actor_avatar=payload.get("avatar_url", "/logo.png"),
+                    type="follow",
+                    text="started following your farm updates & harvests",
+                    action_url=f"/dashboard/chaupal/profile/{clean_current}"
+                )
 
-                if username != current_user and username != "gramsetu_official":
-                    background_tasks.add_task(
-                        create_in_app_notification,
-                        recipient_handle=username,
-                        actor_handle=current_user,
-                        actor_name=actor_name,
-                        actor_avatar=payload.get("avatar_url", "/logo.png"),
-                        type="follow",
-                        text="started following your farm updates & harvests",
-                        action_url=f"/dashboard/chaupal/profile/{current_user}"
-                    )
+                background_tasks.add_task(
+                    trigger_user_email_notification,
+                    recipient_handle=clean_target,
+                    event_type="follow",
+                    actor_name=actor_name,
+                    body_text="Started following your updates on Kisan Chaupal.",
+                    action_url=f"{get_frontend_base_url()}/dashboard/chaupal/profile/{clean_current}"
+                )
 
-                    background_tasks.add_task(
-                        trigger_user_email_notification,
-                        recipient_handle=username,
-                        event_type="follow",
-                        actor_name=actor_name,
-                        body_text="Started following your updates on Kisan Chaupal.",
-                        action_url=f"{get_frontend_base_url()}/dashboard/chaupal/profile/{current_user}"
-                    )
-
-            new_followers_count = await db["chaupal_follows"].count_documents({"following_handle": username})
-        except Exception as e:
-            logger.warning(f"Error toggling follow: {e}")
+        new_followers_count = await db["chaupal_follows"].count_documents({
+            "$or": [
+                {"following_handle": clean_target},
+                {"following_handle": {"$regex": f"^{re.escape(clean_target)}$", "$options": "i"}}
+            ]
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling follow for target={clean_target} by={clean_current}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database error updating follow status: {str(e)}")
 
     return {
         "success": True,
         "following": following,
         "followers_count": new_followers_count,
-        "message": f"{'Following' if following else 'Unfollowed'} @{username}"
+        "message": f"{'Now following' if following else 'Unfollowed'} @{clean_target}"
     }
 
 
 @router.get("/profile/{username}/followers", summary="Get list of followers for a user")
 async def get_user_followers(username: str, current_user: str = Query("citizen_farmer")):
+    clean_username = normalize_handle(username)
+    clean_current = normalize_handle(current_user)
+
     db = get_mongo_db()
     followers = []
 
     if db is not None:
         try:
-            cursor = db["chaupal_follows"].find({"following_handle": username}).sort("created_at", -1)
+            cursor = db["chaupal_follows"].find({
+                "$or": [
+                    {"following_handle": clean_username},
+                    {"following_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+                ]
+            }).sort("created_at", -1)
             handles = []
             async for doc in cursor:
-                handles.append(doc.get("follower_handle"))
+                handles.append(normalize_handle(doc.get("follower_handle")))
 
             if handles:
                 users_cursor = db["users"].find({"$or": [{"handle": {"$in": handles}}, {"username": {"$in": handles}}]})
                 users_map = {}
                 async for u in users_cursor:
-                    h = u.get("handle") or u.get("username")
+                    h = normalize_handle(u.get("handle") or u.get("username"))
                     if h:
                         users_map[h] = u
 
                 for h in handles:
                     u = users_map.get(h, {})
                     is_following_this_user = await db["chaupal_follows"].find_one({
-                        "follower_handle": current_user,
-                        "following_handle": h
+                        "$and": [
+                            {"$or": [{"follower_handle": clean_current}, {"follower_handle": {"$regex": f"^{re.escape(clean_current)}$", "$options": "i"}}]},
+                            {"$or": [{"following_handle": h}, {"following_handle": {"$regex": f"^{re.escape(h)}$", "$options": "i"}}]}
+                        ]
                     }) is not None
 
                     followers.append({
@@ -1478,36 +1562,47 @@ async def get_user_followers(username: str, current_user: str = Query("citizen_f
                         "is_following": is_following_this_user
                     })
         except Exception as e:
-            logger.warning(f"Error fetching followers list for {username}: {e}")
+            logger.error(f"Error fetching followers list for {clean_username}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve followers: {str(e)}")
 
     return {"success": True, "count": len(followers), "followers": followers}
 
 
 @router.get("/profile/{username}/following", summary="Get list of accounts followed by a user")
 async def get_user_following(username: str, current_user: str = Query("citizen_farmer")):
+    clean_username = normalize_handle(username)
+    clean_current = normalize_handle(current_user)
+
     db = get_mongo_db()
     following = []
 
     if db is not None:
         try:
-            cursor = db["chaupal_follows"].find({"follower_handle": username}).sort("created_at", -1)
+            cursor = db["chaupal_follows"].find({
+                "$or": [
+                    {"follower_handle": clean_username},
+                    {"follower_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+                ]
+            }).sort("created_at", -1)
             handles = []
             async for doc in cursor:
-                handles.append(doc.get("following_handle"))
+                handles.append(normalize_handle(doc.get("following_handle")))
 
             if handles:
                 users_cursor = db["users"].find({"$or": [{"handle": {"$in": handles}}, {"username": {"$in": handles}}]})
                 users_map = {}
                 async for u in users_cursor:
-                    h = u.get("handle") or u.get("username")
+                    h = normalize_handle(u.get("handle") or u.get("username"))
                     if h:
                         users_map[h] = u
 
                 for h in handles:
                     if h in ("gramsetu_official", "gramsetu_gov"):
                         is_following_official = await db["chaupal_follows"].find_one({
-                            "follower_handle": current_user,
-                            "following_handle": h
+                            "$and": [
+                                {"$or": [{"follower_handle": clean_current}, {"follower_handle": {"$regex": f"^{re.escape(clean_current)}$", "$options": "i"}}]},
+                                {"$or": [{"following_handle": h}, {"following_handle": {"$regex": f"^{re.escape(h)}$", "$options": "i"}}]}
+                            ]
                         }) is not None
                         following.append({
                             "username": h,
@@ -1522,8 +1617,10 @@ async def get_user_following(username: str, current_user: str = Query("citizen_f
 
                     u = users_map.get(h, {})
                     is_following_this_user = await db["chaupal_follows"].find_one({
-                        "follower_handle": current_user,
-                        "following_handle": h
+                        "$and": [
+                            {"$or": [{"follower_handle": clean_current}, {"follower_handle": {"$regex": f"^{re.escape(clean_current)}$", "$options": "i"}}]},
+                            {"$or": [{"following_handle": h}, {"following_handle": {"$regex": f"^{re.escape(h)}$", "$options": "i"}}]}
+                        ]
                     }) is not None
 
                     following.append({
@@ -1536,7 +1633,8 @@ async def get_user_following(username: str, current_user: str = Query("citizen_f
                         "is_following": is_following_this_user
                     })
         except Exception as e:
-            logger.warning(f"Error fetching following list for {username}: {e}")
+            logger.error(f"Error fetching following list for {clean_username}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve following list: {str(e)}")
 
     return {"success": True, "count": len(following), "following": following}
 
@@ -1620,30 +1718,56 @@ async def get_notifications(
     username: str = Query("citizen_farmer"),
     limit: int = Query(30)
 ):
+    clean_username = normalize_handle(username)
     db = get_mongo_db()
     notifs = []
     unread_count = 0
 
-    if db is not None:
-        try:
-            cursor = db["chaupal_notifications"].find(
-                {"$or": [{"recipient_handle": username}, {"recipient_handle": "all"}]}
-            ).sort("created_at", -1).limit(limit)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection is unavailable")
 
-            async for doc in cursor:
-                doc["_id"] = str(doc["_id"])
-                if not doc.get("is_read"):
-                    unread_count += 1
-                notifs.append(doc)
-        except Exception as e:
-            logger.warning(f"Error fetching in-app notifications: {e}")
+    try:
+        cursor = db["chaupal_notifications"].find(
+            {"$or": [
+                {"recipient_handle": clean_username},
+                {"recipient_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}},
+                {"recipient_handle": "all"}
+            ]}
+        ).sort("created_at", -1).limit(limit)
+
+        actor_handles = set()
+        async for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            if not doc.get("is_read"):
+                unread_count += 1
+            actor_h = normalize_handle(doc.get("actor_handle", ""))
+            if actor_h:
+                actor_handles.add(actor_h)
+            notifs.append(doc)
+
+        # Query follow states for all actors in the notifications list
+        following_set = set()
+        if actor_handles:
+            follow_cursor = db["chaupal_follows"].find({
+                "follower_handle": clean_username,
+                "following_handle": {"$in": list(actor_handles)}
+            })
+            async for f_doc in follow_cursor:
+                following_set.add(normalize_handle(f_doc.get("following_handle")))
+
+        for doc in notifs:
+            doc_actor = normalize_handle(doc.get("actor_handle", ""))
+            doc["is_following"] = doc_actor in following_set
+    except Exception as e:
+        logger.error(f"Error fetching in-app notifications for {clean_username}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve notifications: {str(e)}")
 
     # If empty, return a welcoming seed notification
     if not notifs:
         notifs = [
             {
                 "id": "notif_welcome",
-                "recipient_handle": username,
+                "recipient_handle": clean_username,
                 "actor_handle": "gramsetu_official",
                 "actor_name": "GramSetu Community",
                 "actor_avatar": "/logo.png",
@@ -1651,6 +1775,7 @@ async def get_notifications(
                 "text": "Welcome to Kisan Chaupal! Connect with fellow farmers, ask legal guidance, and trade crops directly.",
                 "action_url": "/dashboard/chaupal",
                 "is_read": True,
+                "is_following": False,
                 "created_at": datetime.utcnow().isoformat()
             }
         ]
@@ -1665,41 +1790,48 @@ async def get_notifications(
 
 @router.post("/notifications/read", summary="Mark notifications as read")
 async def mark_notifications_read(payload: Dict[str, Any] = Body(...)):
-    username = payload.get("username", "citizen_farmer")
+    clean_username = normalize_handle(payload.get("username", "citizen_farmer"))
     notification_id = payload.get("notification_id")
     db = get_mongo_db()
 
-    if db is not None:
-        try:
-            if notification_id:
-                res = await db["chaupal_notifications"].update_one(
-                    {"id": notification_id},
-                    {"$set": {"is_read": True}}
-                )
-                return {"success": True, "marked": res.modified_count}
-            else:
-                res = await db["chaupal_notifications"].update_many(
-                    {"recipient_handle": username, "is_read": False},
-                    {"$set": {"is_read": True}}
-                )
-                return {"success": True, "marked": res.modified_count}
-        except Exception as e:
-            logger.warning(f"Error marking notifications as read: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection is unavailable")
 
-    return {"success": True, "marked": 0}
+    try:
+        if notification_id:
+            res = await db["chaupal_notifications"].update_one(
+                {"id": notification_id},
+                {"$set": {"is_read": True}}
+            )
+            return {"success": True, "marked": res.modified_count}
+        else:
+            res = await db["chaupal_notifications"].update_many(
+                {
+                    "$or": [
+                        {"recipient_handle": clean_username},
+                        {"recipient_handle": {"$regex": f"^{re.escape(clean_username)}$", "$options": "i"}}
+                    ],
+                    "is_read": False
+                },
+                {"$set": {"is_read": True}}
+            )
+            return {"success": True, "marked": res.modified_count}
+    except Exception as e:
+        logger.error(f"Error marking notifications as read: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update read status: {str(e)}")
 
 
 @router.delete("/notifications/{notification_id}", summary="Delete single notification")
 async def delete_notification(notification_id: str):
     db = get_mongo_db()
-    if db is not None:
-        try:
-            res = await db["chaupal_notifications"].delete_one({"id": notification_id})
-            if res.deleted_count > 0:
-                return {"success": True, "message": "Notification removed", "id": notification_id}
-        except Exception as e:
-            logger.warning(f"Error deleting notification: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection is unavailable")
 
-    return {"success": True}
+    try:
+        res = await db["chaupal_notifications"].delete_one({"id": notification_id})
+        if res.deleted_count > 0:
+            return {"success": True, "message": "Notification removed", "id": notification_id}
+        return {"success": True, "message": "Notification already dismissed", "id": notification_id}
+    except Exception as e:
+        logger.error(f"Error deleting notification {notification_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete notification: {str(e)}")
