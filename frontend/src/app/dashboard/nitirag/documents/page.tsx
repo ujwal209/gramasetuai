@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { toast } from 'sonner';
 import {
   getNitiragDocuments,
   deleteNitiragDocument,
@@ -74,17 +75,15 @@ export default function NitiragDocumentsListPage() {
   const handleDelete = async (id: string, title: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm(`Are you sure you want to permanently delete "${title}" and all its vector knowledge points?`)) return;
 
     try {
       await deleteNitiragDocument(id);
       setDocuments((prev) => prev.filter((d) => d.id !== id));
       setSelectedDocIds((prev) => prev.filter((dId) => dId !== id));
-      setActionNotice(`Document "${title}" removed from repository.`);
-      setTimeout(() => setActionNotice(null), 4000);
+      toast.success(`Document "${title}" removed from repository`);
     } catch (err) {
       console.error('Delete failed:', err);
-      alert('Failed to delete document from database.');
+      toast.error('Failed to delete document from database');
     }
   };
 

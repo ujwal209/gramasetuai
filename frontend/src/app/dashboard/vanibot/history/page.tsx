@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { dashboardTranslations } from '@/lib/dashboardTranslations';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { toast } from 'sonner';
 import {
   getVaniHistory,
   deleteVaniHistoryById,
@@ -66,31 +67,29 @@ export default function VaniHistoryListPage() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm('Are you sure you want to permanently delete this voice conversation record?')) return;
 
     try {
       await deleteVaniHistoryById(id);
       setConversations((prev) => prev.filter((c) => c.id !== id));
-      setActionNotice('Conversation record removed successfully.');
-      setTimeout(() => setActionNotice(null), 4000);
+      toast.success('Voice consultation record deleted');
     } catch (err) {
       console.error('Delete failed:', err);
+      toast.error('Failed to delete voice record');
     }
   };
 
   const handleClearAll = async () => {
     if (!conversations.length) return;
-    if (!confirm('Are you sure you want to delete ALL voice conversation archives from the database? This action cannot be undone.')) return;
 
     try {
       for (const c of conversations) {
         await deleteVaniHistoryById(c.id).catch(() => {});
       }
       setConversations([]);
-      setActionNotice('All conversation archives cleared.');
-      setTimeout(() => setActionNotice(null), 4000);
+      toast.success('All voice conversation archives cleared');
     } catch (err) {
       console.error('Clear all failed:', err);
+      toast.error('Failed to clear archives');
     }
   };
 

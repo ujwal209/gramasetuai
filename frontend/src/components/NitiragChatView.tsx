@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { toast } from 'sonner';
 import {
   getNitiragConversations,
   getNitiragConversationById,
@@ -145,7 +146,9 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
       if (activeConv?.id === id) {
         setActiveConv({ ...activeConv, is_archived: !currentStatus });
       }
+      toast.success(currentStatus ? 'Session restored to Active' : 'Session moved to Archived');
     } catch (err) {
+      toast.error('Failed to update archive status');
       console.error('Failed to update archive status:', err);
     }
   };
@@ -153,12 +156,12 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
   const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm('Are you sure you want to permanently remove this consultation history?')) return;
 
     try {
       await deleteNitiragConversation(id);
       const remaining = conversations.filter((c) => c.id !== id);
       setConversations(remaining);
+      toast.success('Consultation session removed');
 
       if (activeConv?.id === id) {
         if (remaining.length > 0) {
@@ -168,6 +171,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
         }
       }
     } catch (err) {
+      toast.error('Failed to delete consultation');
       console.error('Failed to delete conversation:', err);
     }
   };
@@ -186,7 +190,9 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
         setActiveConv({ ...activeConv, title: editTitleValue.trim() });
       }
       setEditingTitleId(null);
+      toast.success('Title updated');
     } catch (err) {
+      toast.error('Failed to update title');
       console.error('Title update failed:', err);
     }
   };
@@ -204,8 +210,10 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
         ...prev.map((c) => (c.id === activeConv.id ? { ...c, is_archived: true } : c)),
       ]);
       setActiveConv(forkedConv);
+      toast.success('Consultation summarized & new session started');
       router.push(`/dashboard/nitirag/chat/${forkedConv.id}`);
     } catch (err) {
+      toast.error('Failed to summarize consultation');
       console.error('Summarize and fork error:', err);
     } finally {
       setIsSummarizing(false);
@@ -233,11 +241,13 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
   const handleCopy = (text: string, msgId: string) => {
     navigator.clipboard.writeText(text);
     setCopiedMessageId(msgId);
+    toast.success('Response copied to clipboard');
     setTimeout(() => setCopiedMessageId(null), 2500);
   };
 
   const handleFeedback = (msgId: string, type: 'liked' | 'disliked') => {
     setLikedMessages((prev) => ({ ...prev, [msgId]: type }));
+    toast.success(type === 'liked' ? 'Feedback recorded: Helpful 👍' : 'Feedback recorded 👎');
   };
 
   const triggerChatWithQuery = async (queryText: string) => {

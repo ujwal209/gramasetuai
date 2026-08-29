@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { CustomSelect, type SelectOption } from '@/components/ui/CustomSelect';
+import { toast } from 'sonner';
 import {
   uploadGazettePdf,
   getNitiragDocuments,
@@ -176,16 +177,13 @@ export default function NitiragUploadPage() {
   };
 
   const handleDelete = async (docId: string, title: string) => {
-    if (!confirm(`Are you sure you want to remove "${title}" from the legal knowledge base?`)) return;
-
     try {
       await deleteNitiragDocument(docId);
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
-      setSuccessMessage(`Document "${title}" removed from the repository.`);
-      setTimeout(() => setSuccessMessage(null), 4000);
+      toast.success(`Document "${title}" removed from repository`);
     } catch (err) {
       console.error('Delete failed:', err);
-      setErrorMessage('Failed to delete document from repository.');
+      toast.error('Failed to delete document from repository');
     }
   };
 

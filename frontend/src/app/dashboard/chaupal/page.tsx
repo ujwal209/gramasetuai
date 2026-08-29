@@ -25,6 +25,7 @@ import {
 } from '@/services/api';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { ChaupalBottomNav } from '@/components/ChaupalBottomNav';
+import { toast } from 'sonner';
 
 export default function KisanChaupalFeedPage() {
   const router = useRouter();
@@ -338,18 +339,18 @@ export default function KisanChaupalFeedPage() {
   };
 
   const handleDeletePost = async (postId: string) => {
-    if (!window.confirm('Are you sure you want to permanently delete this post?')) return;
     setPostMenuOpenId(null);
     try {
       await deleteChaupalPost(postId, user?.handle || undefined);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
+      toast.success('Post removed from feed');
     } catch (err) {
       console.error('Failed to delete post:', err);
+      toast.error('Failed to delete post');
     }
   };
 
   const handleDeleteStory = async (storyId: string) => {
-    if (!window.confirm('Are you sure you want to delete this story?')) return;
     try {
       await deleteChaupalStory(storyId, user?.handle || undefined);
       setStoryGroups((prev) =>
@@ -361,8 +362,10 @@ export default function KisanChaupalFeedPage() {
           .filter((g) => g.stories.length > 0)
       );
       setActiveStoryGroupIndex(null);
+      toast.success('24h Story deleted');
     } catch (err) {
       console.error('Failed to delete story:', err);
+      toast.error('Failed to delete story');
     }
   };
 

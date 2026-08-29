@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { CustomSelect, type SelectOption } from '@/components/ui/CustomSelect';
+import { toast } from 'sonner';
 import {
   getNitiragDocumentById,
   updateNitiragDocument,
@@ -138,14 +139,14 @@ export default function NitiragDocumentDetailPage() {
 
   const handleDelete = async () => {
     if (!document) return;
-    if (!confirm(`Are you sure you want to delete "${document.title}" and its knowledge points from the database?`)) return;
 
     try {
       await deleteNitiragDocument(document.id);
+      toast.success('Gazette document deleted successfully');
       router.push('/dashboard/nitirag/documents');
     } catch (err) {
       console.error('Delete failed:', err);
-      alert('Failed to delete document from database.');
+      toast.error('Failed to delete document from database');
     }
   };
 

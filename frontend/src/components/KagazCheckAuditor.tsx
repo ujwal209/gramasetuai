@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { CustomDropdown } from '@/components/CustomDropdown';
+import { toast } from 'sonner';
 import {
   getPopularSchemes,
   analyzeBatchDocuments,
@@ -217,19 +218,22 @@ export function KagazCheckAuditor({ initialSchemeId }: KagazCheckAuditorProps) {
       if (currentReport?.audit_id === auditId) {
         setCurrentReport(null);
       }
+      toast.success('Document audit record deleted');
     } catch (err) {
       console.error('Failed to delete audit item:', err);
+      toast.error('Failed to delete audit record');
     }
   };
 
   const handleClearAllHistory = async () => {
-    if (!confirm('Are you sure you want to clear all document audit history?')) return;
     try {
       await clearKagazAuditHistory(user?.name || 'citizen');
       setHistoryList([]);
       setCurrentReport(null);
+      toast.success('All document audit history cleared');
     } catch (err) {
       console.error('Failed to clear history:', err);
+      toast.error('Failed to clear audit history');
     }
   };
 

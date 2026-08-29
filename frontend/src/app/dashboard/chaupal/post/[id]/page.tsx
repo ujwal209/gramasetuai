@@ -13,6 +13,7 @@ import {
   type ChaupalPost,
 } from '@/services/api';
 import { ChaupalBottomNav } from '@/components/ChaupalBottomNav';
+import { toast } from 'sonner';
 
 export default function SinglePostDetailPage() {
   const params = useParams();
@@ -80,12 +81,13 @@ export default function SinglePostDetailPage() {
 
   const handleDelete = async () => {
     if (!post) return;
-    if (!window.confirm('Are you sure you want to permanently delete this post?')) return;
     try {
       await deleteChaupalPost(post.id, user?.handle || undefined);
+      toast.success('Post removed from feed');
       router.push('/dashboard/chaupal');
     } catch (err) {
       console.error('Failed to delete post:', err);
+      toast.error('Failed to delete post');
     }
   };
 

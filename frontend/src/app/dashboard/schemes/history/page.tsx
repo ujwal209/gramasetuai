@@ -12,6 +12,7 @@ import {
   type SchemeData,
 } from '@/services/api';
 import { SchemeDetailsModal } from '@/components/SchemeDetailsModal';
+import { toast } from 'sonner';
 
 export default function SchemeSearchHistoryPage() {
   const router = useRouter();
@@ -42,25 +43,27 @@ export default function SchemeSearchHistoryPage() {
 
   const handleDeleteItem = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to remove this search query from your history?')) return;
     setDeletingId(id);
     try {
       await deleteSchemeSearchHistoryItem(id);
       setHistory((prev) => prev.filter((item) => item.id !== id));
+      toast.success('Search query removed from history');
     } catch (err) {
       console.error('Failed to delete search item:', err);
+      toast.error('Failed to delete search item');
     } finally {
       setDeletingId(null);
     }
   };
 
   const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to clear your entire scheme search history?')) return;
     try {
       await clearSchemeSearchHistory(user?.name || undefined);
       setHistory([]);
+      toast.success('Search history cleared');
     } catch (err) {
       console.error('Failed to clear search history:', err);
+      toast.error('Failed to clear history');
     }
   };
 

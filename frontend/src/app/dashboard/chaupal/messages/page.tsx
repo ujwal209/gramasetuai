@@ -21,6 +21,7 @@ import {
 } from '@/services/api';
 import { uploadToCloudinary, uploadAudioToCloudinary } from '@/lib/cloudinary';
 import { ChaupalBottomNav } from '@/components/ChaupalBottomNav';
+import { toast } from 'sonner';
 
 // Voice Note Audio Player Component
 function VoiceNotePlayer({ voiceUrl, isMe }: { voiceUrl: string; isMe: boolean }) {
@@ -625,16 +626,17 @@ export default function ChaupalMessagesPage() {
 
   const handleClearHistory = async () => {
     if (!activeUser) return;
-    if (!confirm(`Are you sure you want to clear chat history with ${activeUser.name}?`)) return;
     try {
       const res = await clearChaupalChatHistory(activeUser.handle, currentHandle);
       if (res && res.success) {
         setMessages([]);
         loadConversationsList();
         setIsChatMenuOpen(false);
+        toast.success(`Chat history with ${activeUser.name} cleared`);
       }
     } catch (err) {
       console.error('Clear history error:', err);
+      toast.error('Failed to clear chat history');
     }
   };
 

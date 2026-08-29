@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { dashboardTranslations } from '@/lib/dashboardTranslations';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { toast } from 'sonner';
 import {
   getVaniHistoryById,
   deleteVaniHistoryById,
@@ -44,12 +45,13 @@ export default function VaniHistoryDetailPage() {
   }, [convId]);
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this voice conversation record?')) return;
     try {
       await deleteVaniHistoryById(convId);
+      toast.success('Voice consultation record deleted');
       router.push('/dashboard/vanibot/history');
     } catch (err) {
       console.error('Delete error:', err);
+      toast.error('Failed to delete voice record');
     }
   };
 
