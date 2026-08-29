@@ -8,6 +8,8 @@ import {
   getChaupalPost,
   toggleChaupalPostLike,
   addChaupalPostComment,
+  updateChaupalPost,
+  deleteChaupalPost,
   type ChaupalPost,
 } from '@/services/api';
 import { ChaupalBottomNav } from '@/components/ChaupalBottomNav';
@@ -24,6 +26,15 @@ export default function SinglePostDetailPage() {
   const [replyingTo, setReplyingTo] = useState<{ commentId: string; username: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Edit / Delete State
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editCaption, setEditCaption] = useState('');
+  const [editCropTag, setEditCropTag] = useState('');
+  const [editTopic, setEditTopic] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     if (postId) loadPost();
   }, [postId]);
@@ -32,11 +43,49 @@ export default function SinglePostDetailPage() {
     setIsLoading(true);
     try {
       const res = await getChaupalPost(postId);
-      if (res && res.post) setPost(res.post);
+      if (res && res.post) {
+        setPost(res.post);
+        setEditCaption(res.post.caption || '');
+        setEditCropTag(res.post.crop_tag || '');
+        setEditTopic(res.post.topic || '');
+        setEditLocation(res.post.location || '');
+      }
     } catch (err) {
       console.warn('Error loading post:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!post) return;
+    setIsSaving(true);
+    try {
+      const res = await updateChaupalPost(post.id, {
+        caption: editCaption,
+        crop_tag: editCropTag,
+        topic: editTopic,
+        location: editLocation,
+      });
+      if (res && res.post) {
+        setPost(res.post);
+        setIsEditing(false);
+      }
+    } catch (err) {
+      console.error('Failed to update post:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!post) return;
+    if (!window.confirm('Are you sure you want to permanently delete this post?')) return;
+    try {
+      await deleteChaupalPost(post.id, user?.handle || undefined);
+      router.push('/dashboard/chaupal');
+    } catch (err) {
+      console.error('Failed to delete post:', err);
     }
   };
 
@@ -121,6 +170,7 @@ export default function SinglePostDetailPage() {
 
   const isLiked = post.likes_users?.includes(user?.handle || 'citizen_farmer');
   const isOfficial = post.author.username === 'gramsetu_official' || (post.author as any).is_official;
+  const isAuthor = post.author.username === (user?.handle || 'citizen_farmer') || post.author.user_id === user?.id || (user as any)?.is_official;
 
   const parentComments = (post.comments || []).filter((c) => !c.parent_id);
   const repliesMap: Record<string, typeof post.comments> = {};
@@ -180,14 +230,69 @@ export default function SinglePostDetailPage() {
             </div>
           </Link>
 
-          {!isOfficial && (
-            <Link
-              href={`/dashboard/chaupal/messages?user=${post.author.username}`}
-              className="px-3 py-1 rounded-xl border border-slate-200 hover:bg-slate-50 text-[11px] font-bold text-slate-700 transition"
-            >
-              Message
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {!isOfficial && (
+              <Link
+                href={`/dashboard/chaupal/messages?user=${post.author.username}`}
+                className="px-3 py-1 rounded-xl border border-slate-200 hover:bg-slate-50 text-[11px] font-bold text-slate-700 transition"
+              >
+                Message
+              </Link>
+            )}
+
+            {/* 3-Dots Menu */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </button>
+
+              {isMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-2xl border border-slate-200 shadow-xl py-1.5 z-40 text-xs animate-sleek">
+                  {isAuthor && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          setIsEditing(true);
+                        }}
+                        className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-slate-800 font-semibold flex items-center gap-2 cursor-pointer"
+                      >
+                        <span>✏️</span>
+                        <span>Edit Post</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="w-full px-3.5 py-2 text-left hover:bg-rose-50 text-rose-600 font-semibold flex items-center gap-2 cursor-pointer"
+                      >
+                        <span>🗑️</span>
+                        <span>Delete Post</span>
+                      </button>
+                      <div className="border-t border-slate-100 my-1" />
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      shareToWhatsApp();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-emerald-700 font-medium flex items-center gap-2 cursor-pointer"
+                  >
+                    <span>💬</span>
+                    <span>Share WhatsApp</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Media */}
@@ -394,6 +499,90 @@ export default function SinglePostDetailPage() {
           </div>
         </div>
       </article>
+
+      {/* EDIT POST MODAL */}
+      {isEditing && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 border border-slate-200 shadow-2xl animate-sleek">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-900">✏️ Edit Post</h3>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Caption &amp; Hashtags</label>
+                <textarea
+                  rows={4}
+                  value={editCaption}
+                  onChange={(e) => setEditCaption(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                  placeholder="Share your crop update or advisory..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Crop Tag</label>
+                  <input
+                    type="text"
+                    value={editCropTag}
+                    onChange={(e) => setEditCropTag(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                    placeholder="e.g. Sugarcane, Tomato"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Topic</label>
+                  <input
+                    type="text"
+                    value={editTopic}
+                    onChange={(e) => setEditTopic(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                    placeholder="e.g. Organic, Harvest"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Location</label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                  placeholder="e.g. Mandya, Karnataka"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSaving || !editCaption.trim()}
+                onClick={handleSaveEdit}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Instagram Bottom Nav */}
       <ChaupalBottomNav />

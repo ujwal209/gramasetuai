@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { CustomDropdown } from '@/components/CustomDropdown';
 import {
   searchSchemesRealtime,
@@ -85,6 +86,7 @@ export function PopularSchemes({
   onCheckEligibility,
 }: PopularSchemesProps) {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const searchParams = useSearchParams();
 
   // Initialize with fallback immediately
@@ -141,16 +143,23 @@ export function PopularSchemes({
       lastSearchedQRef.current = qParam;
       setSearchQuery(qParam);
       if (stateParam) setSelectedState(stateParam);
-      executeSearch(qParam, stateParam || undefined);
+      executeSearch(qParam, stateParam || undefined, language);
     }
-  }, [searchParams]);
+  }, [searchParams, language]);
+
+  // Re-run search if language is toggled while active results are showing
+  useEffect(() => {
+    if (searchQuery.trim() && realtimeResults) {
+      executeSearch(searchQuery, undefined, language);
+    }
+  }, [language]);
 
   // Reset visibleCount to initial batch size whenever filters change
   useEffect(() => {
     setVisibleCount(INITIAL_BATCH_SIZE);
   }, [searchQuery, selectedState, selectedSector, beneficiaryCategory, assistanceType]);
 
-  const executeSearch = async (queryText: string, stateFilter?: string) => {
+  const executeSearch = async (queryText: string, stateFilter?: string, langCode?: string) => {
     if (!queryText.trim()) {
       setRealtimeResults(null);
       return;
@@ -161,10 +170,11 @@ export function PopularSchemes({
       const activeState =
         stateFilter ||
         (selectedState === 'All India (Central)' ? undefined : selectedState);
+      const activeLang = langCode || language || 'en';
       const res = await searchSchemesRealtime(
         queryText,
         activeState,
-        'en',
+        activeLang,
         user?.name || 'citizen'
       );
       setRealtimeResults(res);

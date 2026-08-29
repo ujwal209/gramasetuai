@@ -250,18 +250,24 @@ class RealtimeSearchService:
             "mr": "MARATHI (मराठी - देवनागरी लिपि)",
             "bn": "BENGALI (বাংলা - বাংলা লিপি)",
             "gu": "GUJARATI (ગુજરાતી - ગુજરાતી લિપિ)",
-            "en": "ENGLISH (Indian English)",
+            "en": "ENGLISH",
         }
         target_lang_str = LANG_MAP.get(language, "ENGLISH")
 
-        lang_instruction = ""
-        if language != "en":
+        if language == "en":
+            lang_instruction = """
+CRITICAL LANGUAGE MANDATE:
+The citizen selected language: ENGLISH.
+You MUST write all output fields (headline, summary, key_takeaways, primary_qualification, recommended_action, short_description, detailed_description, benefits, eligibility_criteria, required_documents, application_process) EXCLUSIVELY in clear, professional ENGLISH.
+Do NOT output Hindi, Devanagari script, or other languages when English is selected.
+"""
+        else:
             lang_instruction = f"""
 CRITICAL LANGUAGE MANDATE:
-The citizen is inquiring in {target_lang_str}.
-You MUST write all descriptive fields (including "headline", "summary", "key_takeaways", "primary_qualification", "recommended_action", "short_description", "detailed_description", "benefits", "eligibility_criteria", "required_documents", "application_process") ENTIRELY in {target_lang_str}.
-Do NOT output English sentences for {target_lang_str} requests.
-Maintain numbers (₹6,000, 60%, 2026) and acronyms (PM-KISAN, KCC, DBT) clearly.
+The citizen selected language: {target_lang_str}.
+You MUST write all output fields (headline, summary, key_takeaways, primary_qualification, recommended_action, short_description, detailed_description, benefits, eligibility_criteria, required_documents, application_process) ENTIRELY in {target_lang_str}.
+Do NOT output English sentences for {target_lang_str} requests, and do NOT default to Hindi unless Hindi was explicitly requested.
+Maintain statutory amounts (₹6,000, 90%, 2026) and acronyms (PM-KISAN, KCC, DBT, CSC) clearly.
 """
 
         prompt = f"""

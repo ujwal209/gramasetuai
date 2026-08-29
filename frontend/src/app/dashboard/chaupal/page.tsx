@@ -10,6 +10,10 @@ import {
   toggleChaupalPostLike,
   addChaupalPostComment,
   createChaupalStory,
+  updateChaupalStory,
+  deleteChaupalStory,
+  updateChaupalPost,
+  deleteChaupalPost,
   replyToChaupalStory,
   getChaupalMarketplace,
   getChaupalTrending,
@@ -49,6 +53,15 @@ export default function KisanChaupalFeedPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeCropFilter, setActiveCropFilter] = useState('All');
 
+  // Post Action Menu & Edit State
+  const [postMenuOpenId, setPostMenuOpenId] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<ChaupalPost | null>(null);
+  const [editCaption, setEditCaption] = useState('');
+  const [editCropTag, setEditCropTag] = useState('');
+  const [editTopic, setEditTopic] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [isSavingPostEdit, setIsSavingPostEdit] = useState(false);
+
   // Fully Responsive Story Viewer State with Dynamic Aesthetic Backdrop
   const [activeStoryGroupIndex, setActiveStoryGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState<number>(0);
@@ -56,6 +69,8 @@ export default function KisanChaupalFeedPage() {
   const [isStoryPaused, setIsStoryPaused] = useState(false);
   const [storyReplyText, setStoryReplyText] = useState('');
   const [storyReplySent, setStoryReplySent] = useState(false);
+  const [isEditingStory, setIsEditingStory] = useState(false);
+  const [editStoryCaption, setEditStoryCaption] = useState('');
   const storyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const touchStartYRef = useRef<number | null>(null);
 
@@ -290,6 +305,83 @@ export default function KisanChaupalFeedPage() {
   const shareToWhatsApp = (post: ChaupalPost) => {
     const text = `Check out this post from ${post.author.name} (@${post.author.username}) on Kisan Chaupal:\n\n"${post.caption}"\n\nLocation: ${post.location}\nView on GramSetu: https://gramsetu.in/dashboard/chaupal/post/${post.id}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleOpenEditPost = (post: ChaupalPost) => {
+    setEditingPost(post);
+    setEditCaption(post.caption || '');
+    setEditCropTag(post.crop_tag || '');
+    setEditTopic(post.topic || '');
+    setEditLocation(post.location || '');
+    setPostMenuOpenId(null);
+  };
+
+  const handleSavePostEdit = async () => {
+    if (!editingPost) return;
+    setIsSavingPostEdit(true);
+    try {
+      const res = await updateChaupalPost(editingPost.id, {
+        caption: editCaption,
+        crop_tag: editCropTag,
+        topic: editTopic,
+        location: editLocation,
+      });
+      if (res && res.post) {
+        setPosts((prev) => prev.map((p) => (p.id === editingPost.id ? res.post : p)));
+        setEditingPost(null);
+      }
+    } catch (err) {
+      console.error('Failed to update post:', err);
+    } finally {
+      setIsSavingPostEdit(false);
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm('Are you sure you want to permanently delete this post?')) return;
+    setPostMenuOpenId(null);
+    try {
+      await deleteChaupalPost(postId, user?.handle || undefined);
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    } catch (err) {
+      console.error('Failed to delete post:', err);
+    }
+  };
+
+  const handleDeleteStory = async (storyId: string) => {
+    if (!window.confirm('Are you sure you want to delete this story?')) return;
+    try {
+      await deleteChaupalStory(storyId, user?.handle || undefined);
+      setStoryGroups((prev) =>
+        prev
+          .map((g) => ({
+            ...g,
+            stories: g.stories.filter((s) => s.id !== storyId),
+          }))
+          .filter((g) => g.stories.length > 0)
+      );
+      setActiveStoryGroupIndex(null);
+    } catch (err) {
+      console.error('Failed to delete story:', err);
+    }
+  };
+
+  const handleSaveStoryEdit = async (storyId: string) => {
+    if (!editStoryCaption.trim()) return;
+    try {
+      const res = await updateChaupalStory(storyId, { caption: editStoryCaption });
+      if (res && res.story) {
+        setStoryGroups((prev) =>
+          prev.map((g) => ({
+            ...g,
+            stories: g.stories.map((s) => (s.id === storyId ? { ...s, caption: editStoryCaption } : s)),
+          }))
+        );
+        setIsEditingStory(false);
+      }
+    } catch (err) {
+      console.error('Failed to update story caption:', err);
+    }
   };
 
   const cropFilters = ['All', 'Sugarcane', 'Paddy', 'Tomato', 'Cotton', 'Solar', 'Organic', 'Dairy'];
@@ -596,10 +688,73 @@ export default function KisanChaupalFeedPage() {
                       )}
 
                       {post.crop_tag && (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-800">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-800 hidden sm:inline">
                           {post.crop_tag}
                         </span>
                       )}
+
+                      {/* 3-Dots Action Menu */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id)}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+                          title="Post Options"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </button>
+
+                        {postMenuOpenId === post.id && (
+                          <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-2xl border border-slate-200 shadow-xl py-1.5 z-40 text-xs animate-sleek">
+                            {(post.author.username === (user?.handle || 'citizen_farmer') || post.author.user_id === user?.id || (user as any)?.is_official) && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditPost(post)}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-slate-800 font-semibold flex items-center gap-2 cursor-pointer"
+                                >
+                                  <span>✏️</span>
+                                  <span>Edit Post</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePost(post.id)}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-rose-50 text-rose-600 font-semibold flex items-center gap-2 cursor-pointer"
+                                >
+                                  <span>🗑️</span>
+                                  <span>Delete Post</span>
+                                </button>
+                                <div className="border-t border-slate-100 my-1" />
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/dashboard/chaupal/post/${post.id}`);
+                                setPostMenuOpenId(null);
+                                alert('Post link copied to clipboard!');
+                              }}
+                              className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-slate-700 font-medium flex items-center gap-2 cursor-pointer"
+                            >
+                              <span>📋</span>
+                              <span>Copy Link</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                shareToWhatsApp(post);
+                                setPostMenuOpenId(null);
+                              }}
+                              className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-emerald-700 font-medium flex items-center gap-2 cursor-pointer"
+                            >
+                              <span>💬</span>
+                              <span>Share to WhatsApp</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1022,7 +1177,7 @@ export default function KisanChaupalFeedPage() {
                 <Link
                   href={`/dashboard/chaupal/profile/${activeGroup.username}`}
                   onClick={() => setActiveStoryGroupIndex(null)}
-                  className="flex items-center gap-2.5 group cursor-pointer"
+                  className="flex items-center gap-2.5 group cursor-pointer min-w-0"
                 >
                   <div className={`w-9 h-9 rounded-full p-0.5 shrink-0 ${isViewingOfficialStory ? 'bg-gradient-to-tr from-amber-400 to-emerald-600' : 'bg-gradient-to-tr from-amber-500 to-emerald-500'}`}>
                     <img
@@ -1049,14 +1204,29 @@ export default function KisanChaupalFeedPage() {
                   </div>
                 </Link>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveStoryGroupIndex(null)}
-                  className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 text-white font-black text-sm flex items-center justify-center transition cursor-pointer ring-1 ring-white/40 shrink-0"
-                  title="Close Story (ESC)"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Delete own story button */}
+                  {(activeGroup.username === (user?.handle || 'citizen_farmer') || (user as any)?.is_official) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteStory(activeStory.id)}
+                      className="h-8 px-2.5 rounded-full bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1 transition cursor-pointer"
+                      title="Delete Story"
+                    >
+                      <span>🗑️</span>
+                      <span className="hidden sm:inline">Delete</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveStoryGroupIndex(null)}
+                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 text-white font-black text-sm flex items-center justify-center transition cursor-pointer ring-1 ring-white/40 shrink-0"
+                    title="Close Story (ESC)"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1079,10 +1249,50 @@ export default function KisanChaupalFeedPage() {
 
             {/* Bottom Story Controls */}
             <div className="p-4 sm:p-5 z-30 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white space-y-2 pb-8 sm:pb-5 backdrop-blur-xs">
-              {activeStory.caption && (
-                <p className="text-xs sm:text-sm font-medium leading-relaxed drop-shadow-md">
-                  {activeStory.caption}
-                </p>
+              {isEditingStory ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editStoryCaption}
+                    onChange={(e) => setEditStoryCaption(e.target.value)}
+                    placeholder="Edit caption..."
+                    className="flex-1 h-9 px-3 text-xs rounded-xl bg-white/20 border border-white/30 text-white placeholder:text-white/60 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveStoryEdit(activeStory.id)}
+                    className="h-9 px-3 bg-emerald-600 text-white text-xs font-bold rounded-xl"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingStory(false)}
+                    className="h-9 px-2.5 bg-white/20 text-white text-xs rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  {activeStory.caption && (
+                    <p className="text-xs sm:text-sm font-medium leading-relaxed drop-shadow-md">
+                      {activeStory.caption}
+                    </p>
+                  )}
+                  {(activeGroup.username === (user?.handle || 'citizen_farmer') || (user as any)?.is_official) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditStoryCaption(activeStory.caption || '');
+                        setIsEditingStory(true);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-[10px] text-white font-mono shrink-0 cursor-pointer"
+                    >
+                      ✏️ Edit
+                    </button>
+                  )}
+                </div>
               )}
 
               {isViewingOfficialStory ? (
@@ -1130,6 +1340,90 @@ export default function KisanChaupalFeedPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* 6. EDIT POST MODAL */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 border border-slate-200 shadow-2xl animate-sleek">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-900">✏️ Edit Post</h3>
+              <button
+                type="button"
+                onClick={() => setEditingPost(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Caption &amp; Hashtags</label>
+                <textarea
+                  rows={4}
+                  value={editCaption}
+                  onChange={(e) => setEditCaption(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                  placeholder="Share your crop update or advisory..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Crop Tag</label>
+                  <input
+                    type="text"
+                    value={editCropTag}
+                    onChange={(e) => setEditCropTag(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                    placeholder="e.g. Sugarcane, Tomato"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Topic</label>
+                  <input
+                    type="text"
+                    value={editTopic}
+                    onChange={(e) => setEditTopic(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                    placeholder="e.g. Organic, Harvest"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Location</label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-900"
+                  placeholder="e.g. Mandya, Karnataka"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingPost(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingPostEdit || !editCaption.trim()}
+                onClick={handleSavePostEdit}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                {isSavingPostEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

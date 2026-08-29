@@ -1967,6 +1967,27 @@ export async function createChaupalStory(payload: {
 }
 
 /**
+ * Update story caption
+ */
+export async function updateChaupalStory(storyId: string, payload: {
+  caption?: string;
+  media_url?: string;
+}): Promise<{ success: boolean; story: ChaupalStory }> {
+  const res = await apiClient.put<{ success: boolean; story: ChaupalStory }>(`/api/v1/chaupal/stories/${storyId}`, payload);
+  return res.data;
+}
+
+/**
+ * Delete a story
+ */
+export async function deleteChaupalStory(storyId: string, username?: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiClient.delete<{ success: boolean; message: string }>(`/api/v1/chaupal/stories/${storyId}`, {
+    params: { username }
+  });
+  return res.data;
+}
+
+/**
  * Get Kisan Chaupal feed posts
  */
 export async function getChaupalPosts(params?: {
@@ -2003,10 +2024,36 @@ export async function createChaupalPost(payload: {
 }
 
 /**
+ * Update an existing post
+ */
+export async function updateChaupalPost(postId: string, payload: {
+  caption?: string;
+  topic?: string;
+  crop_tag?: string;
+  farming_stage?: string;
+  farming_practice?: string;
+  observed_yield?: string;
+  location?: string;
+  media_urls?: string[];
+}): Promise<{ success: boolean; post: ChaupalPost }> {
+  const res = await apiClient.put<{ success: boolean; post: ChaupalPost }>(`/api/v1/chaupal/posts/${postId}`, payload);
+  return res.data;
+}
+
+/**
+ * Delete a post
+ */
+export async function deleteChaupalPost(postId: string, username?: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiClient.delete<{ success: boolean; message: string }>(`/api/v1/chaupal/posts/${postId}`, {
+    params: { username }
+  });
+  return res.data;
+}
+
+/**
  * Toggle like on a post
  */
 export async function toggleChaupalPostLike(postId: string, userId: string = 'citizen_farmer'): Promise<{
-  success: boolean;
   liked: boolean;
   likes_count: number;
 }> {
@@ -2086,6 +2133,22 @@ export async function createChaupalMarketplaceItem(payload: {
  */
 export async function getChaupalMarketplaceItem(itemId: string): Promise<{ success: boolean; item: ChaupalMarketplaceItem }> {
   const res = await apiClient.get<{ success: boolean; item: ChaupalMarketplaceItem }>(`/api/v1/chaupal/marketplace/${itemId}`);
+  return res.data;
+}
+
+/**
+ * Update marketplace listing
+ */
+export async function updateChaupalMarketplaceItem(itemId: string, payload: Partial<ChaupalMarketplaceItem>): Promise<{ success: boolean; item: ChaupalMarketplaceItem }> {
+  const res = await apiClient.put<{ success: boolean; item: ChaupalMarketplaceItem }>(`/api/v1/chaupal/marketplace/${itemId}`, payload);
+  return res.data;
+}
+
+/**
+ * Delete marketplace listing
+ */
+export async function deleteChaupalMarketplaceItem(itemId: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiClient.delete<{ success: boolean; message: string }>(`/api/v1/chaupal/marketplace/${itemId}`);
   return res.data;
 }
 

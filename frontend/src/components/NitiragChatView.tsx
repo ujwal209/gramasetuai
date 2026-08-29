@@ -308,7 +308,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
     );
 
   return (
-    <div className="flex h-screen w-full bg-white text-slate-900 overflow-hidden text-left antialiased relative">
+    <div className="flex h-screen h-[100dvh] max-h-[100dvh] w-full bg-white text-slate-900 overflow-hidden text-left antialiased relative">
       {/* Mobile Drawer Backdrop */}
       {isMobileSidebarOpen && (
         <div
@@ -503,10 +503,10 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
       </aside>
 
       {/* 2. MAIN CHAT VIEWPORT */}
-      <section className="flex-1 flex flex-col justify-between bg-white overflow-hidden relative min-h-0">
+      <section className="flex-1 flex flex-col justify-between bg-white overflow-hidden relative min-h-0 h-full">
         {/* Modern Minimalist Top Header Navbar */}
-        <header className="h-14 px-4 sm:px-6 border-b border-slate-100 bg-white flex items-center justify-between gap-3 shrink-0 z-20">
-          <div className="flex items-center gap-3">
+        <header className="h-13 sm:h-14 px-2.5 sm:px-6 border-b border-slate-100 bg-white flex items-center justify-between gap-2 shrink-0 z-20">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
             {/* Sidebar Toggle */}
             <button
               type="button"
@@ -517,7 +517,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                   setIsSidebarOpen(!isSidebarOpen);
                 }
               }}
-              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition cursor-pointer shadow-2xs"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition cursor-pointer shadow-2xs shrink-0"
               title="Toggle Consultations Sidebar"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -528,39 +528,39 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
             {/* Back to Dashboard */}
             <Link
               href="/dashboard"
-              className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold transition flex items-center gap-1 shadow-2xs"
+              className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold transition flex items-center gap-1 shadow-2xs shrink-0"
               title="Return to Main Dashboard"
             >
               <span>←</span>
-              <span>Dashboard</span>
+              <span className="hidden xs:inline sm:inline">Dashboard</span>
             </Link>
 
             <span className="text-slate-200 hidden sm:inline">|</span>
 
             {/* Brand Logo & Clean Title */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 truncate">
               <img
                 src="/logo.png"
                 alt="GramSetu"
-                className="h-6 w-auto object-contain"
+                className="h-5 sm:h-6 w-auto object-contain shrink-0"
               />
-              <span className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
-                Niti RAG Legal AI
+              <span className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight truncate">
+                Niti RAG
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-bold font-mono hidden sm:inline">
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-bold font-mono hidden md:inline shrink-0">
                 OFFICIAL GAZETTES
               </span>
             </div>
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Document Scope Filter Pill */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setIsDocPickerOpen(!isDocPickerOpen)}
-                className={`h-8 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                className={`h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
                   selectedCount > 0
                     ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-bold shadow-2xs'
                     : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
@@ -572,10 +572,10 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                 <span className="hidden sm:inline">
                   {selectedCount > 0 ? `Scoped (${selectedCount})` : 'All Gazettes'}
                 </span>
-                <span className="sm:hidden">
-                  {selectedCount > 0 ? `${selectedCount} Docs` : 'All'}
+                <span className="sm:hidden text-[11px]">
+                  {selectedCount > 0 ? `${selectedCount} Docs` : 'All Docs'}
                 </span>
-                <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-2.5 h-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -634,10 +634,10 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                 type="button"
                 disabled={isSummarizing}
                 onClick={handleSummarizeAndFork}
-                className="h-8 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
+                className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
                 title="Summarize key findings and start fresh consultation"
               >
-                {isSummarizing ? <span>Summarizing...</span> : <span>Summarize &amp; Fork →</span>}
+                {isSummarizing ? <span>Summarizing...</span> : <span>Summarize →</span>}
               </button>
             )}
 
@@ -658,12 +658,12 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
 
         {/* 3. CENTER VIEWPORT */}
         {isFreshConversation ? (
-          /* COMPLETELY NON-SCROLLABLE NEW CHAT VIEWPORT */
-          <div className="flex-1 flex flex-col justify-center items-center px-4 sm:px-8 py-4 overflow-hidden bg-white">
-            <div className="max-w-3xl w-full text-center space-y-6 animate-sleek">
+          /* RESPONSIVE SCROLLABLE NEW CHAT VIEWPORT */
+          <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 bg-white min-h-0">
+            <div className="max-w-3xl mx-auto w-full text-center space-y-6 animate-sleek my-auto">
               {/* Brand Header */}
               <div className="space-y-3">
-                <div className="w-14 h-14 mx-auto flex items-center justify-center">
+                <div className="w-12 sm:w-14 h-12 sm:h-14 mx-auto flex items-center justify-center">
                   <img
                     src="/logo.png"
                     alt="GramSetu"
@@ -688,13 +688,13 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono px-1">
                   Recommended Statutory Inquiries
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                   {PROMPT_SUGGESTIONS.map((item, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => triggerChatWithQuery(item.query)}
-                      className="p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-white hover:bg-slate-50/50 text-left transition space-y-1 shadow-2xs group cursor-pointer"
+                      className="p-3 sm:p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-white hover:bg-slate-50/50 text-left transition space-y-1 shadow-2xs group cursor-pointer"
                     >
                       <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
                         <span className="font-bold text-emerald-800 group-hover:text-emerald-900">
@@ -718,8 +718,8 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
           </div>
         ) : (
           /* ACTIVE MESSAGE STREAM */
-          <div className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-6 space-y-8 overscroll-contain min-h-0 bg-white">
-            <div className="max-w-4xl mx-auto w-full space-y-8">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-8 lg:px-12 py-4 sm:py-6 space-y-6 overscroll-contain min-h-0 bg-white">
+            <div className="max-w-4xl mx-auto w-full space-y-6 sm:space-y-8">
               {loadingSession ? (
                 <div className="p-12 text-center text-xs text-slate-400 space-y-2">
                   <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -727,17 +727,17 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                 </div>
               ) : (
                 activeConv.messages.map((msg, i) => (
-                  <div key={msg.id || i} className="w-full space-y-3">
+                  <div key={msg.id || i} className="w-full space-y-2.5">
                     {msg.role === 'user' ? (
                       /* USER MESSAGE: Clean Minimalist Pill */
                       <div className="flex justify-end">
-                        <div className="max-w-[85%] sm:max-w-[75%] px-5 py-3 rounded-2xl bg-slate-100 text-slate-900 text-sm leading-relaxed font-normal shadow-2xs">
+                        <div className="max-w-[90%] sm:max-w-[75%] px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-slate-100 text-slate-900 text-xs sm:text-sm leading-relaxed font-normal shadow-2xs">
                           {msg.text}
                         </div>
                       </div>
                     ) : (
                       /* ASSISTANT MESSAGE: Flat, Clean, Minimalist */
-                      <div className="w-full space-y-3 pt-2">
+                      <div className="w-full space-y-2.5 pt-1">
                         {/* Header Badge */}
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-center text-[10px] font-black shrink-0">
@@ -749,13 +749,13 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                         </div>
 
                         {/* Markdown Text Stream */}
-                        <div className="prose prose-base max-w-none text-slate-800 leading-relaxed pl-8">
+                        <div className="prose prose-sm sm:prose-base max-w-none text-slate-800 leading-relaxed pl-0 sm:pl-8">
                           <MarkdownContent content={msg.text} />
                         </div>
 
                         {/* Minimalist Citation Chips */}
                         {msg.citations && msg.citations.length > 0 && (
-                          <div className="pl-8 space-y-2 pt-2">
+                          <div className="pl-0 sm:pl-8 space-y-2 pt-2">
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
                                 Grounded Gazette Excerpts ({msg.citations.length})
@@ -775,11 +775,11 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                             </div>
 
                             {/* Minimalist Citation Pills */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               {msg.citations.slice(0, 4).map((c, cIdx) => (
                                 <div
                                   key={cIdx}
-                                  className="p-3 rounded-xl border border-slate-200/90 hover:border-emerald-400 bg-slate-50/40 hover:bg-slate-50 text-xs space-y-1.5 transition shadow-2xs"
+                                  className="p-2.5 sm:p-3 rounded-xl border border-slate-200/90 hover:border-emerald-400 bg-slate-50/40 hover:bg-slate-50 text-xs space-y-1.5 transition shadow-2xs"
                                 >
                                   <div className="flex items-center justify-between text-[10px] font-mono gap-1">
                                     <div className="flex items-center gap-1.5 truncate">
@@ -789,7 +789,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                                           alt="portal"
                                           className="w-3.5 h-3.5 rounded shrink-0"
                                           onError={(e) => {
-                                            e.currentTarget.style.display = 'none';
+                                             (e.currentTarget as any).style.display = 'none';
                                           }}
                                         />
                                       )}
@@ -825,12 +825,12 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
 
                             {/* Detailed Passages Panel */}
                             {expandedSourcesMsgId === msg.id && (
-                              <div className="mt-2 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 animate-sleek">
+                              <div className="mt-2 p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 animate-sleek">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase font-mono block">
                                   Full Statutory Passages &amp; Context
                                 </span>
                                 {msg.citations.map((c, idx) => (
-                                  <div key={idx} className="p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-1">
+                                  <div key={idx} className="p-2.5 sm:p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-1">
                                     <p className="font-bold text-slate-800 text-[11px]">
                                       {c.document_title} (Page {c.page_number})
                                     </p>
@@ -845,7 +845,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                         )}
 
                         {/* Minimalist Message Actions Toolbar */}
-                        <div className="pl-8 pt-1 flex items-center justify-between text-slate-400">
+                        <div className="pl-0 sm:pl-8 pt-1 flex items-center justify-between text-slate-400">
                           <div className="flex items-center gap-1">
                             {/* Copy Icon */}
                             <button
@@ -931,7 +931,7 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
               )}
 
               {loadingTurn && (
-                <div className="flex items-center gap-2.5 py-3 pl-8 text-xs text-slate-500 animate-sleek">
+                <div className="flex items-center gap-2.5 py-3 pl-0 sm:pl-8 text-xs text-slate-500 animate-sleek">
                   <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
                   <span>Synthesizing statutory guidance from gazette records...</span>
                 </div>
@@ -943,31 +943,31 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
         )}
 
         {/* 4. PINNED BOTTOM INPUT BAR */}
-        <div className="p-4 sm:px-8 pb-5 border-t border-slate-100 bg-white shrink-0 z-20">
-          <div className="max-w-4xl mx-auto w-full space-y-2">
+        <div className="p-2.5 sm:p-4 sm:px-8 pb-3 sm:pb-5 border-t border-slate-100 bg-white shrink-0 z-20">
+          <div className="max-w-4xl mx-auto w-full space-y-1.5 sm:space-y-2">
             <form onSubmit={handleSendMessage} className="relative flex items-center">
               <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask statutory legal question (e.g. PM-KUSUM 90% subsidy qualification, RTC land mutation rules)..."
-                className="w-full h-12 pl-4 pr-24 text-xs sm:text-sm rounded-2xl border border-slate-200 bg-slate-50/70 text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-500 transition shadow-2xs"
+                placeholder="Ask legal question (e.g. PM-KUSUM 90% solar subsidy, RTC land mutation)..."
+                className="w-full h-11 sm:h-12 pl-3 sm:pl-4 pr-20 sm:pr-24 text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50/70 text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-500 transition shadow-2xs"
               />
               <button
                 type="submit"
                 disabled={!inputText.trim() || loadingTurn}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 sm:h-9 px-3 sm:px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold rounded-lg sm:rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
               >
                 <span>Send</span>
                 <span>→</span>
               </button>
             </form>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-slate-400 px-1">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono text-slate-400 px-1">
               <button
                 type="button"
                 onClick={() => setEnableWebSearch(!enableWebSearch)}
-                className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border text-[9px] sm:text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
                   enableWebSearch
                     ? 'border-blue-500 bg-blue-50 text-blue-900'
                     : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
@@ -976,11 +976,11 @@ export function NitiragChatView({ conversationId }: NitiragChatViewProps) {
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                 </svg>
-                <span>Live Web Search: {enableWebSearch ? 'ENABLED' : 'OFF'}</span>
+                <span>Web Search: {enableWebSearch ? 'ON' : 'OFF'}</span>
               </button>
 
-              <span>
-                GramSetu Niti RAG • Grounded in Official Gazette Directives
+              <span className="hidden sm:inline">
+                GramSetu Niti RAG • Official Gazette Directives
               </span>
             </div>
           </div>

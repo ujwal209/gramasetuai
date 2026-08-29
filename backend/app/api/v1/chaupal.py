@@ -218,6 +218,56 @@ async def create_story(payload: Dict[str, Any] = Body(...)):
     return {"success": True, "story": story_doc}
 
 
+@router.delete("/stories/{story_id}", summary="Delete a 24h story")
+async def delete_story(
+    story_id: str,
+    username: Optional[str] = Query(None)
+):
+    db = get_mongo_db()
+    if db is not None:
+        try:
+            query: Dict[str, Any] = {"id": story_id}
+            if username and username != "gramsetu_official":
+                query["$or"] = [{"username": username}, {"user_id": username}]
+            res = await db["chaupal_stories"].delete_one(query)
+            if res.deleted_count > 0:
+                return {"success": True, "message": "Story deleted successfully", "id": story_id}
+            res2 = await db["chaupal_stories"].delete_one({"id": story_id})
+            if res2.deleted_count > 0:
+                return {"success": True, "message": "Story deleted successfully", "id": story_id}
+        except Exception as e:
+            logger.warning(f"Error deleting story {story_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="Story not found")
+
+
+@router.put("/stories/{story_id}", summary="Edit a 24h story caption")
+async def update_story(
+    story_id: str,
+    payload: Dict[str, Any] = Body(...)
+):
+    caption = payload.get("caption", "").strip()
+    db = get_mongo_db()
+    if db is not None:
+        try:
+            update_fields = {"caption": caption, "updated_at": datetime.utcnow().isoformat()}
+            if payload.get("media_url"):
+                update_fields["media_url"] = payload.get("media_url")
+            res = await db["chaupal_stories"].update_one(
+                {"id": story_id},
+                {"$set": update_fields}
+            )
+            if res.matched_count > 0:
+                story = await db["chaupal_stories"].find_one({"id": story_id})
+                if story:
+                    story["_id"] = str(story["_id"])
+                return {"success": True, "story": story}
+        except Exception as e:
+            logger.warning(f"Error updating story {story_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="Story not found")
+
+
 @router.post("/stories/{story_id}/reply", summary="Reply directly to a story via direct message with mail alert")
 async def reply_to_story(
     story_id: str,
@@ -432,6 +482,71 @@ async def create_post(payload: Dict[str, Any] = Body(...)):
             logger.warning(f"Error inserting post into MongoDB: {e}")
 
     return {"success": True, "post": post_doc}
+
+
+@router.put("/posts/{post_id}", summary="Edit Kisan Chaupal post")
+async def update_post(
+    post_id: str,
+    payload: Dict[str, Any] = Body(...)
+):
+    caption = payload.get("caption", "").strip()
+    hashtags = re.findall(r"#\w+", caption) if caption else []
+
+    update_data: Dict[str, Any] = {
+        "updated_at": datetime.utcnow().isoformat()
+    }
+    if caption:
+        update_data["caption"] = caption
+        update_data["hashtags"] = hashtags
+    if "crop_tag" in payload:
+        update_data["crop_tag"] = payload["crop_tag"]
+    if "topic" in payload:
+        update_data["topic"] = payload["topic"]
+    if "location" in payload:
+        update_data["location"] = payload["location"]
+    if "farming_practice" in payload:
+        update_data["farming_practice"] = payload["farming_practice"]
+    if "farming_stage" in payload:
+        update_data["farming_stage"] = payload["farming_stage"]
+    if "observed_yield" in payload:
+        update_data["observed_yield"] = payload["observed_yield"]
+    if "media_urls" in payload:
+        update_data["media_urls"] = payload["media_urls"]
+
+    db = get_mongo_db()
+    if db is not None:
+        try:
+            res = await db["chaupal_posts"].update_one(
+                {"$or": [{"id": post_id}, {"_id": post_id}]},
+                {"$set": update_data}
+            )
+            if res.matched_count > 0:
+                updated_doc = await db["chaupal_posts"].find_one({"$or": [{"id": post_id}, {"_id": post_id}]})
+                if updated_doc:
+                    updated_doc["_id"] = str(updated_doc["_id"])
+                return {"success": True, "post": updated_doc}
+        except Exception as e:
+            logger.warning(f"Error updating post {post_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="Post not found")
+
+
+@router.delete("/posts/{post_id}", summary="Delete Kisan Chaupal post")
+async def delete_post(
+    post_id: str,
+    username: Optional[str] = Query(None)
+):
+    db = get_mongo_db()
+    if db is not None:
+        try:
+            query: Dict[str, Any] = {"$or": [{"id": post_id}, {"_id": post_id}]}
+            res = await db["chaupal_posts"].delete_one(query)
+            if res.deleted_count > 0:
+                return {"success": True, "message": "Post deleted successfully", "id": post_id}
+        except Exception as e:
+            logger.warning(f"Error deleting post {post_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="Post not found")
 
 
 @router.post("/posts/{post_id}/like", summary="Toggle like with email notification alert")
@@ -996,6 +1111,44 @@ async def get_marketplace_item(item_id: str):
             logger.warning(f"Error fetching item {item_id}: {e}")
 
     raise HTTPException(status_code=404, detail="Marketplace listing not found")
+
+
+@router.put("/marketplace/{item_id}", summary="Update marketplace listing")
+async def update_marketplace_item(item_id: str, payload: Dict[str, Any] = Body(...)):
+    db = get_mongo_db()
+    if db is not None:
+        try:
+            update_data = {
+                k: v for k, v in payload.items() if k not in ["_id", "id", "created_at"]
+            }
+            update_data["updated_at"] = datetime.utcnow().isoformat()
+            res = await db["chaupal_marketplace"].update_one(
+                {"$or": [{"id": item_id}, {"_id": item_id}]},
+                {"$set": update_data}
+            )
+            if res.matched_count > 0:
+                item = await db["chaupal_marketplace"].find_one({"$or": [{"id": item_id}, {"_id": item_id}]})
+                if item:
+                    item["_id"] = str(item["_id"])
+                return {"success": True, "item": item}
+        except Exception as e:
+            logger.warning(f"Error updating item {item_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="Item not found")
+
+
+@router.delete("/marketplace/{item_id}", summary="Delete marketplace listing")
+async def delete_marketplace_item(item_id: str):
+    db = get_mongo_db()
+    if db is not None:
+        try:
+            res = await db["chaupal_marketplace"].delete_one({"$or": [{"id": item_id}, {"_id": item_id}]})
+            if res.deleted_count > 0:
+                return {"success": True, "message": "Marketplace listing removed", "id": item_id}
+        except Exception as e:
+            logger.warning(f"Error deleting marketplace item {item_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="Item not found")
 
 
 # -------------------------------------------------------------
