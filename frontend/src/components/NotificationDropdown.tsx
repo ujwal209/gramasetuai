@@ -231,11 +231,19 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
         )}
       </button>
 
-      {/* Modern High-End Notification Popover (IG Style) */}
+      {/* High-End Responsive Popover (IG Style) */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2.5 w-[360px] sm:w-[410px] max-w-[calc(100vw-20px)] bg-white/98 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] z-50 overflow-hidden flex flex-col max-h-[540px] animate-in fade-in zoom-in-95 duration-150">
-          {/* Header */}
-          <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between bg-white/80">
+        <>
+          {/* Mobile Overlay Backdrop */}
+          <div
+            onClick={() => setIsOpen(false)}
+            className="fixed inset-0 bg-slate-950/20 backdrop-blur-xs z-40 sm:hidden transition-opacity animate-in fade-in"
+          />
+
+          {/* Popover Card */}
+          <div className="fixed top-14 left-2 right-2 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:mt-2.5 w-auto sm:w-[400px] bg-white/98 backdrop-blur-2xl rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.18)] z-50 overflow-hidden flex flex-col max-h-[calc(100dvh-75px)] sm:max-h-[520px] animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between bg-white/90 shrink-0">
             <div className="flex items-center gap-2">
               <h3 className="text-[13px] font-bold text-slate-900 tracking-tight">
                 Activity
@@ -446,7 +454,7 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
               Direct Messages
             </Link>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

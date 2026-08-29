@@ -1122,16 +1122,16 @@ export default function KisanChaupalFeedPage() {
           }}
         >
           {/* Dynamic Ambient Background Blur */}
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-2xl z-0 overflow-hidden">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-3xl z-0 overflow-hidden">
             <img
               src={activeStory.media_url}
               alt="Backdrop blur"
               onError={(e) => {
                 e.currentTarget.src = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&auto=format&fit=crop&q=80';
               }}
-              className="w-full h-full object-cover blur-3xl opacity-40 scale-150 saturate-200 transform transition-all duration-700"
+              className="w-full h-full object-cover blur-3xl opacity-60 scale-125 saturate-150 transform transition-all duration-700"
             />
-            <div className="absolute inset-0 bg-radial from-transparent via-slate-950/70 to-black/95" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-900/30 to-slate-950/70" />
           </div>
 
           {/* Desktop Left Nav Button */}
@@ -1141,7 +1141,7 @@ export default function KisanChaupalFeedPage() {
               e.stopPropagation();
               handlePrevStory();
             }}
-            className="hidden md:flex absolute left-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/25 backdrop-blur-md text-white items-center justify-center transition border border-white/20 shadow-lg cursor-pointer"
+            className="hidden md:flex absolute left-8 z-30 w-12 h-12 rounded-full bg-white/15 hover:bg-white/30 backdrop-blur-md text-white items-center justify-center transition border border-white/30 shadow-lg cursor-pointer"
             title="Previous Story"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -1153,10 +1153,10 @@ export default function KisanChaupalFeedPage() {
           <div
             onMouseDown={() => setIsStoryPaused(true)}
             onMouseUp={() => setIsStoryPaused(false)}
-            className="relative z-10 w-full h-[100dvh] sm:h-[88vh] sm:max-h-[780px] sm:max-w-sm md:max-w-md bg-black sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between border border-white/15 sm:border-white/25"
+            className="relative z-10 w-full h-[100dvh] sm:h-[88vh] sm:max-h-[780px] sm:max-w-sm md:max-w-md bg-slate-900 sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between border border-white/20 sm:border-white/30"
           >
             {/* Top Progress Bars & Header Bar */}
-            <div className="p-4 sm:p-3.5 space-y-2.5 z-30 bg-gradient-to-b from-black/90 via-black/50 to-transparent backdrop-blur-xs">
+            <div className="p-4 sm:p-3.5 space-y-2.5 z-30 bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-transparent backdrop-blur-xs">
               <div className="flex items-center gap-1.5">
                 {activeGroup.stories.map((_, sIdx) => (
                   <div key={sIdx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
@@ -1234,7 +1234,7 @@ export default function KisanChaupalFeedPage() {
             </div>
 
             {/* Story Media */}
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950">
               <img
                 src={activeStory.media_url}
                 alt="Story content"
@@ -1251,7 +1251,7 @@ export default function KisanChaupalFeedPage() {
             </div>
 
             {/* Bottom Story Controls */}
-            <div className="p-4 sm:p-5 z-30 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white space-y-2 pb-8 sm:pb-5 backdrop-blur-xs">
+            <div className="p-4 sm:p-5 z-30 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent text-white space-y-2 pb-8 sm:pb-5 backdrop-blur-xs">
               {isEditingStory ? (
                 <div className="flex items-center gap-2">
                   <input
@@ -1348,7 +1348,7 @@ export default function KisanChaupalFeedPage() {
 
       {/* 6. EDIT POST MODAL */}
       {editingPost && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 border border-slate-200 shadow-2xl animate-sleek">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900">✏️ Edit Post</h3>
