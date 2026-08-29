@@ -402,6 +402,8 @@ export function NotificationDropdown({ variant = 'navbar' }: NotificationDropdow
                     </div>
                   </div>
 
+                  {/* Right: IG-style Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {/* Follow Back Button (IG Style) */}
                     {notif.type === 'follow' && (
                       (() => {
