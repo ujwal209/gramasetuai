@@ -137,6 +137,27 @@ class EmailService:
             logger.error(f"Failed to send email to {to_email}: {e}")
             return False
 
+    async def send_otp_email(
+        self,
+        to_email: str,
+        name: str,
+        otp: str,
+        purpose: str = "verification"
+    ) -> bool:
+        """
+        Asynchronously sends a 6-digit OTP verification or password reset email.
+        """
+        if not to_email:
+            return False
+
+        subject = (
+            f"Your GramSetu AI Verification Code: {otp}"
+            if purpose == "verification"
+            else f"GramSetu AI Password Reset Code: {otp}"
+        )
+        html_body = self._build_otp_html(name=name, otp=otp, purpose=purpose)
+        return await asyncio.to_thread(self._send_smtp_sync, to_email, subject, html_body)
+
     def _build_notification_html(
         self,
         recipient_name: str,
